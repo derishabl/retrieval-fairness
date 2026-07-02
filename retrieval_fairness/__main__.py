@@ -1,3 +1,4 @@
+import sys
 from retrieval_fairness.cli import main
 
-main()
+sys.exit(main())

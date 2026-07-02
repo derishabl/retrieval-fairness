@@ -94,6 +94,11 @@ def cmd_dashboard(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_gate(args: argparse.Namespace) -> int:
+    from retrieval_fairness.gate import run_gate_cli
+    return run_gate_cli(args)
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="retrieval_fairness", description="«code coverage для retrieval»")
     sub = parser.add_subparsers(dest="cmd", required=True)
@@ -125,6 +130,16 @@ def main(argv: list[str] | None = None) -> int:
     p_dash.add_argument("--html", required=True)
     p_dash.add_argument("--corpus", help="JSONL с векторами для PCA-проекции")
     p_dash.set_defaults(func=cmd_dashboard)
+
+    p_gate = sub.add_parser("gate", help="CI-гейт: сравнить candidate с baseline по правилам")
+    p_gate.add_argument("--baseline", required=True)
+    p_gate.add_argument("--candidate", required=True)
+    p_gate.add_argument("--max-coverage-drop", type=float, default=0.0, help="макс. падение coverage (п.п., 0..1)")
+    p_gate.add_argument("--max-dark-matter-rise", type=float, default=0.0)
+    p_gate.add_argument("--max-gini-rise", type=float, default=0.0)
+    p_gate.add_argument("--min-query-overlap", type=float, default=0.0)
+    p_gate.add_argument("--strict", action="store_true", help="нарушение -> exit 1 (для CI)")
+    p_gate.set_defaults(func=cmd_gate)
 
     args = parser.parse_args(argv)
     return args.func(args)
