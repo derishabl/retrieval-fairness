@@ -85,9 +85,9 @@ def cmd_probe(args: argparse.Namespace) -> int:
     assert result.report is not None
     print(result.report)
     if args.json:
-        with open(args.json, "w", encoding="utf-8") as f:
-            json.dump(result.report.to_dict(), f, ensure_ascii=False, indent=2)
-        print(f"\nJSON-отчёт сохранён: {args.json}")
+        from retrieval_fairness.serialize import save_probe
+        save_probe(result, args.json)
+        print(f"\nJSON-отчёт (baseline) сохранён: {args.json}")
     if args.html:
         from retrieval_fairness.dashboard import render_dashboard
         vecs = [c.vector for c in corpus] if corpus else None
@@ -143,9 +143,9 @@ def cmd_synth(args: argparse.Namespace) -> int:
                          n_terms=args.n_terms, query_style=args.style)
     print(result.report)
     if args.json:
-        with open(args.json, "w", encoding="utf-8") as f:
-            json.dump(result.report.to_dict(), f, ensure_ascii=False, indent=2)
-        print(f"\nJSON-отчёт сохранён: {args.json}")
+        from retrieval_fairness.serialize import save_probe
+        save_probe(result, args.json)
+        print(f"\nJSON-отчёт (baseline) сохранён: {args.json}")
     if args.html:
         from retrieval_fairness.dashboard import render_dashboard
         render_dashboard(result, args.html,
@@ -191,10 +191,14 @@ def main(argv: list[str] | None = None) -> int:
     p_gate = sub.add_parser("gate", help="CI-гейт: сравнить candidate с baseline по правилам")
     p_gate.add_argument("--baseline", required=True)
     p_gate.add_argument("--candidate", required=True)
-    p_gate.add_argument("--max-coverage-drop", type=float, default=0.0, help="макс. падение coverage (п.п., 0..1)")
-    p_gate.add_argument("--max-dark-matter-rise", type=float, default=0.0)
-    p_gate.add_argument("--max-gini-rise", type=float, default=0.0)
-    p_gate.add_argument("--min-query-overlap", type=float, default=0.0)
+    p_gate.add_argument("--max-coverage-drop", type=float, default=None,
+                        help="макс. падение coverage (доли, 0..1; 0 = zero tolerance)")
+    p_gate.add_argument("--max-dark-matter-rise", type=float, default=None,
+                        help="макс. рост dark-matter (доли, 0..1; 0 = zero tolerance)")
+    p_gate.add_argument("--max-gini-rise", type=float, default=None,
+                        help="макс. рост Gini (0 = zero tolerance)")
+    p_gate.add_argument("--min-query-overlap", type=float, default=None,
+                        help="мин. средний per-query overlap (0..1)")
     p_gate.add_argument("--strict", action="store_true", help="нарушение -> exit 1 (для CI)")
     p_gate.set_defaults(func=cmd_gate)
 

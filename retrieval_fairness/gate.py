@@ -4,17 +4,18 @@ gate.py — CI-гейт для retrieval-fairness.
 Сравнивает candidate (новый прогон) с baseline по настраиваемым правилам.
 Возвращает exit code: 0 = гейт пройден, 1 = нарушено правило (для CI).
 
-Правила (по умолчанию advisory, opt-in strict):
-  --max-coverage-drop 5      coverage не должен упасть более чем на 5 п.п.
-  --max-dark-matter-rise 5   dark-matter не должен вырасти более чем на 5 п.п.
-  --max-gini-rise 0.1        Gini не должен вырасти более чем на 0.1
-  --min-query-overlap 0.8    средний per-query overlap не ниже 0.8
-  --strict                   нарушения = exit 1 (иначе advisory, exit 0)
+Правила (по умолчанию advisory, opt-in strict). Пороги — в долях (0..1);
+правило активно, если флаг передан (0 = zero tolerance):
+  --max-coverage-drop 0.05      coverage не должен упасть более чем на 5 п.п.
+  --max-dark-matter-rise 0.05   dark-matter не должен вырасти более чем на 5 п.п.
+  --max-gini-rise 0.1           Gini не должен вырасти более чем на 0.1
+  --min-query-overlap 0.8       средний per-query overlap не ниже 0.8
+  --strict                      нарушения = exit 1 (иначе advisory, exit 0)
 
 Использование в CI:
   python -m retrieval_fairness probe --corpus c.jsonl --queries q.jsonl --json new.json
   python -m retrieval_fairness gate --baseline v1.json --candidate new.json --strict \
-      --max-coverage-drop 5 --max-dark-matter-rise 5
+      --max-coverage-drop 0.05 --max-dark-matter-rise 0.05
 """
 
 from __future__ import annotations
@@ -54,13 +55,14 @@ class GateResult:
 def evaluate_gate(
     baseline_path: str,
     candidate_path: str,
-    max_coverage_drop: float = 0.0,    # п.п. (0..1), 0 = правило выключено
-    max_dark_matter_rise: float = 0.0,
-    max_gini_rise: float = 0.0,
-    min_query_overlap: float = 0.0,
+    max_coverage_drop: float | None = None,    # доли (0..1); None = правило выключено
+    max_dark_matter_rise: float | None = None,
+    max_gini_rise: float | None = None,
+    min_query_overlap: float | None = None,
 ) -> GateResult:
     """
-    Оценить правила гейта. Правило активно, если порог > 0.
+    Оценить правила гейта. Правило активно, если порог задан (не None);
+    0 означает zero tolerance (любое ухудшение = fail).
     """
     base = load_probe(baseline_path)
     cand = load_probe(candidate_path)
@@ -68,23 +70,23 @@ def evaluate_gate(
 
     rules: list[GateRule] = []
 
-    if max_coverage_drop > 0:
+    if max_coverage_drop is not None:
         # coverage_delta = c - b; падение = -delta. Падение > max => fail
         drop = -d.coverage_delta
         passed = drop <= max_coverage_drop
         rules.append(GateRule("coverage_drop", drop, max_coverage_drop, passed, "drop"))
 
-    if max_dark_matter_rise > 0:
+    if max_dark_matter_rise is not None:
         rise = d.dark_matter_delta
         passed = rise <= max_dark_matter_rise
         rules.append(GateRule("dark_matter_rise", rise, max_dark_matter_rise, passed, "rise"))
 
-    if max_gini_rise > 0:
+    if max_gini_rise is not None:
         rise = d.gini_delta
         passed = rise <= max_gini_rise
         rules.append(GateRule("gini_rise", rise, max_gini_rise, passed, "rise"))
 
-    if min_query_overlap > 0:
+    if min_query_overlap is not None:
         ov = d.mean_query_overlap
         passed = ov >= min_query_overlap
         rules.append(GateRule("query_overlap", ov, min_query_overlap, passed, "min"))

@@ -77,9 +77,66 @@ def test_gate_no_rules_always_passes():
     with tempfile.TemporaryDirectory() as d:
         b = _save(good, d, "b.json")
         c = _save(good, d, "c.json")
-        res = evaluate_gate(b, c)  # все пороги 0 -> правил нет
+        res = evaluate_gate(b, c)  # все пороги None -> правил нет
     assert res.passed is True
     assert res.rules == []
+
+
+def test_gate_zero_tolerance_catches_any_drop():
+    # max_coverage_drop=0 (zero tolerance) -> любое падение = fail
+    base = probe(InMemoryVectorStore(_real_drop_chunks()), _real_drop_queries(), top_k=4)
+    cand = probe(InMemoryVectorStore(_real_drop_chunks()), _real_drop_queries(), top_k=1)
+    with tempfile.TemporaryDirectory() as d:
+        b = _save(base, d, "b.json")
+        c = _save(cand, d, "c.json")
+        res = evaluate_gate(b, c, max_coverage_drop=0.0)
+    assert res.passed is False
+    cov_rule = next(r for r in res.rules if r.name == "coverage_drop")
+    assert cov_rule.threshold == 0.0
+
+
+def test_gate_zero_tolerance_passes_on_no_change():
+    good, _ = _toy_results()
+    with tempfile.TemporaryDirectory() as d:
+        b = _save(good, d, "b.json")
+        c = _save(good, d, "c.json")
+        res = evaluate_gate(b, c, max_coverage_drop=0.0)
+    assert res.passed is True  # drop=0 <= 0
+
+
+def _real_drop_chunks():
+    return [
+        Chunk(id="A", text="a", vector=[1.0, 0.0]),
+        Chunk(id="B", text="b", vector=[1.0, 0.01]),
+        Chunk(id="C", text="c", vector=[0.9, 0.0]),
+        Chunk(id="D", text="d", vector=[0.9, 0.01]),
+    ]
+
+
+def _real_drop_queries():
+    return [Query(id="q1", vector=[1.0, 0.0]), Query(id="q2", vector=[1.0, 0.005])]
+
+
+def test_probe_to_gate_end_to_end_cli(tmp_path=None):
+    """
+    Блокер-сценарий: probe --json (через save_probe) -> gate --baseline.
+    Раньше probe сохранял report.to_dict(), а gate ждал формат save_probe -> ломалось.
+    """
+    import os, tempfile
+    from retrieval_fairness.serialize import save_probe, load_probe
+    chunks = _real_drop_chunks()
+    queries = _real_drop_queries()
+    base = probe(InMemoryVectorStore(chunks), queries, top_k=4)
+    cand = probe(InMemoryVectorStore(chunks), queries, top_k=1)
+    with tempfile.TemporaryDirectory() as d:
+        bp = os.path.join(d, "base.json")
+        cp = os.path.join(d, "cand.json")
+        save_probe(base, bp)   # то, что делает probe --json после фикса
+        save_probe(cand, cp)
+        # gate грузит через load_probe — должно работать
+        res = evaluate_gate(bp, cp, max_coverage_drop=0.05, max_dark_matter_rise=0.05)
+    assert res.passed is False
+    assert any(r.name == "coverage_drop" and not r.passed for r in res.rules)
 
 
 if __name__ == "__main__":
