@@ -43,7 +43,10 @@ def load_probe(path: str) -> ProbeResult:
         gini=rep_dict["gini"],
         hub_capture_top5=rep_dict["hub_capture_top5"],
         hub_capture_top10=rep_dict["hub_capture_top10"],
-        hub_leaderboard=rep_dict.get("hub_leaderboard", []),
-        dark_matter_ids=[cid for cid, v in freqs.items() if v == 0],
+        hub_leaderboard=[tuple(x) for x in rep_dict.get("hub_leaderboard", [])],
+        lorenz_curve=[tuple(p) for p in rep_dict.get("lorenz_curve", [])],
+        dark_matter_ids=rep_dict.get(
+            "dark_matter_ids", [cid for cid, v in freqs.items() if v == 0]
+        ),
     )
     return ProbeResult(freqs=freqs, hits_per_query=hits, report=report)

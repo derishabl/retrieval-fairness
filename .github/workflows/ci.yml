@@ -1,0 +1,38 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.9", "3.11", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Install
+        run: pip install -e .[dev,faiss]
+      - name: Tests
+        run: python -m pytest tests/ -q
+      - name: Smoke — synth -> gate (dogfood CI-гейта)
+        run: |
+          retrieval-fairness demo --top-k 5
+          python - <<'EOF'
+          import json, random
+          random.seed(0)
+          with open("corpus.jsonl", "w") as f:
+              for i in range(50):
+                  vec = [random.random() for _ in range(8)]
+                  f.write(json.dumps({"id": f"c{i}", "text": f"chunk {i}", "vector": vec}) + "\n")
+          EOF
+          retrieval-fairness synth --corpus corpus.jsonl --top-k 5 --json baseline.json
+          retrieval-fairness gate --baseline baseline.json --candidate baseline.json \
+            --max-coverage-drop 0.05 --max-dark-matter-rise 0.05 --max-gini-rise 0.05
+      - name: CLI помощь работает
+        run: retrieval-fairness --help

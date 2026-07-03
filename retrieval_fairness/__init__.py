@@ -9,6 +9,8 @@ exposure (Gini), захват хабами, и regression-diff при смене
 (coverage, Gini, dark-matter, hub-capture) + CLI probe.
 """
 
+__version__ = "0.1.0"
+
 from retrieval_fairness.types import Chunk, Hit, Query, VectorStore
 from retrieval_fairness.adapters import InMemoryVectorStore
 from retrieval_fairness.metrics import (
@@ -24,6 +26,7 @@ from retrieval_fairness.diff import diff_reports, DiffReport
 from retrieval_fairness.serialize import save_probe, load_probe
 
 __all__ = [
+    "__version__",
     "Chunk",
     "Hit",
     "Query",

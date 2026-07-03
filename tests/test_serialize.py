@@ -32,6 +32,24 @@ def test_roundtrip_preserves_freqs_and_hits():
     assert loaded.report.dark_matter_ids == result.report.dark_matter_ids
 
 
+def test_roundtrip_preserves_lorenz_and_dark_matter_ids():
+    """#TODO-публикация: save/load был асимметричен — lorenz_curve терялась."""
+    store, queries = _toy()
+    result = probe(store, queries, top_k=2)
+    assert result.report.lorenz_curve, "в оригинале кривая есть"
+    with tempfile.TemporaryDirectory() as d:
+        path = os.path.join(d, "b.json")
+        save_probe(result, path)
+        loaded = load_probe(path)
+    assert loaded.report.lorenz_curve, "после load кривая не должна теряться"
+    for (x0, y0), (x1, y1) in zip(result.report.lorenz_curve, loaded.report.lorenz_curve):
+        assert abs(x0 - x1) < 1e-5 and abs(y0 - y1) < 1e-5
+    # dark_matter_ids теперь явно в JSON-отчёте
+    d2 = result.report.to_dict()
+    assert d2["dark_matter_ids"] == result.report.dark_matter_ids
+    assert d2["dark_matter_count"] == len(result.report.dark_matter_ids)
+
+
 def test_roundtrip_diff_matches():
     """diff(original, loaded) должен быть нулевым."""
     from retrieval_fairness.diff import diff_reports

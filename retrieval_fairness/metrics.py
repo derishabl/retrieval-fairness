@@ -12,7 +12,6 @@ Product-упаковка (coverage %, dark-matter %, hub-capture ratio) — на
 
 from __future__ import annotations
 from dataclasses import dataclass, field
-import math
 
 
 def retrieval_frequencies(hits_per_query: list[list[str]], corpus_ids: list[str]) -> dict[str, int]:
@@ -165,6 +164,8 @@ class FairnessReport:
             "hub_capture_top10": round(self.hub_capture_top10, 4),
             "hub_leaderboard": self.hub_leaderboard,
             "dark_matter_count": len(self.dark_matter_ids),
+            "dark_matter_ids": self.dark_matter_ids,
+            "lorenz_curve": [[round(x, 6), round(y, 6)] for x, y in self.lorenz_curve],
         }
 
 
