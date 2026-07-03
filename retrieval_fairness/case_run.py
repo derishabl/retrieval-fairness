@@ -55,12 +55,16 @@ def run_case(
     top_k: int,
     out_prefix: str,
     html_path: str | None = None,
+    max_features: int | None = None,
 ) -> None:
     """Полный цикл: embed -> FAISS -> probe -> save + dashboard."""
     print(f"[case] embedder={embedder_name} corpus={len(corpus)} queries={len(queries)} top-k={top_k}")
 
     # 1. embed
-    emb = get_embedder(embedder_name)
+    kw = {}
+    if embedder_name == "tfidf" and max_features:
+        kw["max_features"] = max_features
+    emb = get_embedder(embedder_name, **kw)
     texts = [c.text for c in corpus]
     q_texts = [q.get("text", q["id"]) for q in queries]
     # fit ТОЛЬКО на корпусе — запросы не входят в vocabulary.
@@ -112,10 +116,16 @@ def main() -> int:
     ap.add_argument("--top-k", type=int, default=10)
     ap.add_argument("--out", required=True, help="prefix for outputs (no extension)")
     ap.add_argument("--html", help="path for HTML dashboard")
+    ap.add_argument("--max-features", type=int, default=None,
+                    help="tfidf: ограничить словарь (обязательно для больших корпусов, иначе OOM)")
     args = ap.parse_args()
     corpus = load_corpus(args.corpus)
     queries = load_queries(args.queries)
-    run_case(corpus, queries, args.embedder, args.top_k, args.out, args.html)
+    if args.embedder == "tfidf" and args.max_features is None and len(corpus) > 20000:
+        print(f"WARNING: tfidf на {len(corpus)} чанках без --max-features — риск OOM "
+              "(dense-матрица под FAISS). Рекомендуется --max-features 4096.")
+    run_case(corpus, queries, args.embedder, args.top_k, args.out, args.html,
+             max_features=args.max_features)
     return 0
 
 

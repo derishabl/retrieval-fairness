@@ -26,6 +26,29 @@ def test_tfidf_encode_without_fit_raises():
         pass
 
 
+def test_tfidf_max_features_caps_dim():
+    texts = [f"word{i} common token{i}" for i in range(50)]
+    emb = TfidfEmbedder(max_features=10).fit(texts)
+    assert emb.dim == 10
+    assert emb.encode(["word1"]).shape[1] == 10
+    # через реестр тоже прокидывается
+    emb2 = get_embedder("tfidf", max_features=5).fit(texts)
+    assert emb2.dim == 5
+
+
+def test_tfidf_warns_on_huge_dense_matrix():
+    import warnings
+    emb = TfidfEmbedder().fit(["alpha beta gamma"])
+    emb._dim_val = 10**9  # симуляция огромного словаря без аллокации
+    with warnings.catch_warnings(record=True) as w:
+        warnings.simplefilter("always")
+        try:
+            emb.encode(["alpha"])
+        except Exception:
+            pass  # важно только предупреждение до transform
+    assert any(issubclass(x.category, ResourceWarning) for x in w)
+
+
 def test_get_embedder_tfidf():
     emb = get_embedder("tfidf")
     assert isinstance(emb, TfidfEmbedder)

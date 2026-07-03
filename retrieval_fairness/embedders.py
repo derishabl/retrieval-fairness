@@ -11,6 +11,7 @@ sentence-transformers, ...) к общему интерфейсу, чтобы pro
 
 from __future__ import annotations
 from typing import Protocol, runtime_checkable
+import warnings
 import numpy as np
 
 
@@ -24,11 +25,22 @@ class Embedder(Protocol):
 
 
 class TfidfEmbedder:
-    """Лёгкий TF-IDF эмбеддер (sklearn). Без тяжёлых моделей."""
+    """Лёгкий TF-IDF эмбеддер (sklearn). Без тяжёлых моделей.
 
-    def __init__(self, ngram_range: tuple[int, int] = (1, 1)):
+    ВНИМАНИЕ про память: encode() денсифицирует sparse-матрицу под
+    FAISS. Без max_features словарь на большом корпусе — сотни тысяч
+    измерений, и dense-матрица не влезет в RAM (260k чанков × 400k
+    слов ≈ сотни ГБ). Для корпусов >~10k чанков задавайте
+    max_features (например 4096).
+    """
+
+    # порог предупреждения: оценка dense-матрицы в байтах (float64)
+    _DENSE_WARN_BYTES = 2 * 1024**3  # 2 GB
+
+    def __init__(self, ngram_range: tuple[int, int] = (1, 1),
+                 max_features: int | None = None):
         from sklearn.feature_extraction.text import TfidfVectorizer
-        self._vec = TfidfVectorizer(ngram_range=ngram_range)
+        self._vec = TfidfVectorizer(ngram_range=ngram_range, max_features=max_features)
         self._fitted = False
         self._dim_val = 0
 
@@ -41,6 +53,14 @@ class TfidfEmbedder:
     def encode(self, texts: list[str]) -> np.ndarray:
         if not self._fitted:
             raise RuntimeError("TfidfEmbedder not fitted; call .fit() first")
+        est = len(texts) * self._dim_val * 8  # float64
+        if est > self._DENSE_WARN_BYTES:
+            warnings.warn(
+                f"TfidfEmbedder.encode: dense-матрица ~{est / 1024**3:.1f} GB "
+                f"({len(texts)} текстов × {self._dim_val} измерений). "
+                "Риск OOM — задайте max_features (например 4096).",
+                ResourceWarning, stacklevel=2,
+            )
         return self._vec.transform(texts).toarray().astype(float)
 
     @property
