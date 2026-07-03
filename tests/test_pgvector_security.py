@@ -1,6 +1,5 @@
 """test_pgvector_security.py — SQL identifier validation (#3), no instance needed."""
 from __future__ import annotations
-import pytest
 
 # psycopg может быть не установлен — валидация идентификаторов должна работать
 # до импорта psycopg (конструктор поднимает ImportError только если psycopg есть).
@@ -42,7 +41,6 @@ def test_distance_op_whitelist():
     # инъекция через distance_op
     try:
         # эмулируем конструктор без psycopg: проверяем только валидацию op
-        from retrieval_fairness.adapters import pgvector as pgv
         # distance_op проверяется в __init__; без psycopg поднимётся ImportError,
         # поэтому проверяем логику напрямую
         assert "<=>" in allowed and "malicious" not in allowed

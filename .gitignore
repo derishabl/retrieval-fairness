@@ -22,6 +22,8 @@ htmlcov/
 
 # Data (BEIR NQ etc., large)
 data/
+nq_full/
+dist_check/
 
 # Case study artifacts (large: faiss index, generated dashboards)
 cases/*.faiss

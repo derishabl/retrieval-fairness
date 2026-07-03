@@ -30,7 +30,7 @@ def _cli_error(msg: str) -> int:
 def _wrap_cli(fn):
     """Декоратор CLI-команды: ловит ошибки ввода -> exit 2 с человеком-сообщением.
     Покрывает: нет файла, нет обязательного аргумента, невалидный аргумент сторa."""
-    import functools, sys
+    import functools
     @functools.wraps(fn)
     def wrapper(args):
         try:
@@ -188,6 +188,14 @@ def cmd_synth(args: argparse.Namespace) -> int:
 
 
 def main(argv: list[str] | None = None) -> int:
+    # Windows-консоль часто в cp866/cp1251 — русский вывод превращается в кракозябры.
+    import sys
+    for stream in (sys.stdout, sys.stderr):
+        if hasattr(stream, "reconfigure"):
+            try:
+                stream.reconfigure(encoding="utf-8", errors="replace")
+            except Exception:
+                pass
     parser = argparse.ArgumentParser(prog="retrieval_fairness", description="«code coverage для retrieval»")
     sub = parser.add_subparsers(dest="cmd", required=True)
 

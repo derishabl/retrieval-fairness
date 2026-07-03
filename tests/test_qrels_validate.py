@@ -1,6 +1,10 @@
 """test_qrels_validate.py — smoke-тест scripts/qrels_validate.py на мини-фикстуре."""
 from __future__ import annotations
-import json, os, subprocess, sys, tempfile
+import json
+import os
+import subprocess
+import sys
+import tempfile
 
 SCRIPT = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
                       "scripts", "qrels_validate.py")

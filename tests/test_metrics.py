@@ -5,7 +5,6 @@ test_metrics.py — юнит-тесты метрик exposure.
 """
 
 from __future__ import annotations
-import math
 from retrieval_fairness.metrics import (
     coverage, dark_matter, gini, hub_capture, lorenz,
     retrieval_frequencies, build_report,
@@ -92,7 +91,7 @@ def test_build_report_fields():
 
 if __name__ == "__main__":
     # простой runner без pytest
-    import inspect, sys
+    import sys
     fns = [(n, f) for n, f in sorted(globals().items()) if n.startswith("test_") and callable(f)]
     passed = 0
     for name, fn in fns:

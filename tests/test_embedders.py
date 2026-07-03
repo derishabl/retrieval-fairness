@@ -81,9 +81,7 @@ def test_get_embedder_sbert_passes_model_name():
         def get_sentence_embedding_dimension(self):
             return 384
         def encode(self, texts, show_progress_bar=False):
-            import numpy as np
             return np.zeros((len(texts), 384))
-    orig = em.SentenceTransformerEmbedder
     # подменяем класс в модуле, чтобы импорт внутри get_embedder подхватил
     import sys
     import types
@@ -94,10 +92,10 @@ def test_get_embedder_sbert_passes_model_name():
         # перезагружаем, чтобы SentenceTransformerEmbedder использовал фейк
         import importlib
         importlib.reload(em)
-        e = em.get_embedder("sbert", model_name="my-org/my-model")
+        em.get_embedder("sbert", model_name="my-org/my-model")
         assert captured["model_name"] == "my-org/my-model"
         # minilm — фиксированная, model_name игнорируется
-        e2 = em.get_embedder("minilm", model_name="ignored-pls")
+        em.get_embedder("minilm", model_name="ignored-pls")
         assert captured["model_name"] == "sentence-transformers/all-MiniLM-L6-v2"
     finally:
         sys.modules.pop("sentence_transformers", None)

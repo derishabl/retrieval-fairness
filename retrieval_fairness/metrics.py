@@ -143,7 +143,7 @@ class FairnessReport:
             f"  Gini:         {self.gini:.3f}   (0=равномерно, 1=концентрация)",
             f"  Hub capture:  top5={self.hub_capture_top5*100:5.1f}%  top10={self.hub_capture_top10*100:5.1f}%",
             "-" * 64,
-            f"  Top хабы (id: сколько раз в top-k):",
+            "  Top хабы (id: сколько раз в top-k):",
         ]
         for cid, cnt in self.hub_leaderboard:
             lines.append(f"    {cid:30} {cnt}")

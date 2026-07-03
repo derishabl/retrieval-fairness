@@ -1,6 +1,7 @@
 """test_dashboard.py — HTML dashboard generation."""
 from __future__ import annotations
-import tempfile, os, re
+import tempfile
+import os
 from retrieval_fairness.types import Chunk, Query
 from retrieval_fairness.stores import InMemoryVectorStore
 from retrieval_fairness.probe import probe

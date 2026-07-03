@@ -1,6 +1,7 @@
 """test_gate.py — CI gate rules."""
 from __future__ import annotations
-import tempfile, os
+import tempfile
+import os
 from retrieval_fairness.types import Chunk, Query
 from retrieval_fairness.stores import InMemoryVectorStore
 from retrieval_fairness.probe import probe
@@ -158,8 +159,9 @@ def test_probe_to_gate_end_to_end_cli(tmp_path=None):
     Блокер-сценарий: probe --json (через save_probe) -> gate --baseline.
     Раньше probe сохранял report.to_dict(), а gate ждал формат save_probe -> ломалось.
     """
-    import os, tempfile
-    from retrieval_fairness.serialize import save_probe, load_probe
+    import os
+    import tempfile
+    from retrieval_fairness.serialize import save_probe
     chunks = _real_drop_chunks()
     queries = _real_drop_queries()
     base = probe(InMemoryVectorStore(chunks), queries, top_k=4)

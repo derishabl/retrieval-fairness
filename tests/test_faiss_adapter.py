@@ -1,6 +1,7 @@
 """test_faiss_adapter.py — FAISS adapter vs InMemory consistency."""
 from __future__ import annotations
-import tempfile, os
+import tempfile
+import os
 import numpy as np
 
 from retrieval_fairness.types import Chunk, Query

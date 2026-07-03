@@ -72,9 +72,9 @@ def run_case(
     # с разными запросами портится (silent wrong result). Для dense (MiniLM/BGE)
     # fit — no-op, так что поведение не меняется.
     emb.fit(texts)
-    print(f"[case] encoding corpus...")
+    print("[case] encoding corpus...")
     chunk_vecs = emb.encode(texts)
-    print(f"[case] encoding queries...")
+    print("[case] encoding queries...")
     query_vecs = emb.encode(q_texts)
     queries_vec = [Query(id=q["id"], vector=v.tolist(), text=q.get("text", "")) for q, v in zip(queries, query_vecs)]
 

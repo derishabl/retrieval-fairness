@@ -9,9 +9,7 @@ retrieval_fairness.adapters — адаптеры векторных хранил
 """
 
 from __future__ import annotations
-from typing import Iterator
 
-from retrieval_fairness.types import Chunk, Hit
 from retrieval_fairness.adapters.base import BaseVectorStoreAdapter
 from retrieval_fairness.adapters.inmemory import InMemoryVectorStore
 

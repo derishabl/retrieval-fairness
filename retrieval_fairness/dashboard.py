@@ -17,7 +17,6 @@ dashboard.py — HTML-дашборд exposure-смещения.
 from __future__ import annotations
 import html
 import json
-from dataclasses import dataclass
 
 from retrieval_fairness.probe import ProbeResult
 from retrieval_fairness.metrics import lorenz, hub_leaderboard
@@ -28,9 +27,7 @@ def _svg_lorenz(points: list[tuple[float, float]], width: int = 400, height: int
     """Lorenz curve как inline SVG. Диагональ = равенство."""
     pad = 30
     w, h = width - 2 * pad, height - 2 * pad
-    # диагональ (равенство)
-    diag = f"M {pad} {height-pad} L {pad+w} {pad}"
-    # кривая
+    # кривая (диагональ равенства рисуется ниже отдельным <line>)
     if not points:
         curve = ""
     else:
