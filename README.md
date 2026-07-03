@@ -54,6 +54,18 @@ retrieval-fairness gate --baseline v1.json --candidate new.json --strict \
 # exit 1 in strict mode if coverage dropped > 5 pp -> CI blocks the deploy
 ```
 
+### Cross-check dark matter against qrels ("lost gold")
+
+If you have relevance judgments (qrels), cross-check which dark-matter
+chunks are actually relevant — the corpus contains material the
+retriever never surfaces. No competitor exposure tool ships this:
+
+```bash
+retrieval-fairness qrels --probe report.json --qrels qrels.json \
+    --queries queries.jsonl --json qrels_report.json
+# prints: lost gold count, recall@k, dark_relevant_ids
+```
+
 ## Metrics
 
 | Metric | What it shows |
@@ -64,6 +76,7 @@ retrieval-fairness gate --baseline v1.json --candidate new.json --strict \
 | Hub capture top5/10 | share of exposure captured by top-N hubs |
 | Lorenz curve | inequality visualization |
 | Per-query overlap | result stability across a migration |
+| Lost gold / Recall@k | dark-matter chunks that are actually relevant (qrels cross-check) |
 
 ## How it works
 

@@ -162,6 +162,19 @@ def cmd_dashboard(args: argparse.Namespace) -> int:
     return 0
 
 
+@_wrap_cli
+def cmd_qrels(args: argparse.Namespace) -> int:
+    from retrieval_fairness.qrels import validate_qrels
+    res = validate_qrels(args.probe, args.qrels, args.queries)
+    print(res)
+    if args.json:
+        import json as _json
+        with open(args.json, "w", encoding="utf-8") as f:
+            _json.dump(res.to_dict(), f, ensure_ascii=False, indent=2)
+        print(f"\nJSON сохранён: {args.json}")
+    return 0
+
+
 def cmd_gate(args: argparse.Namespace) -> int:
     from retrieval_fairness.gate import run_gate_cli
     return run_gate_cli(args)
@@ -241,6 +254,14 @@ def main(argv: list[str] | None = None) -> int:
                         help="мин. средний per-query overlap: доля 0..1 (0.8 = 80%%)")
     p_gate.add_argument("--strict", action="store_true", help="нарушение -> exit 1 (для CI)")
     p_gate.set_defaults(func=cmd_gate)
+
+    p_qrels = sub.add_parser("qrels",
+                              help="сверить dark matter с qrels: «потерянное золото» + recall@k")
+    p_qrels.add_argument("--probe", required=True, help="save_probe JSON (probe --json / case_run --out)")
+    p_qrels.add_argument("--qrels", required=True, help="qrels.json: {query_id: {doc_id: grade}}")
+    p_qrels.add_argument("--queries", required=True, help="queries.jsonl (порядок строк = порядок hits)")
+    p_qrels.add_argument("--json", help="экспорт результата в JSON")
+    p_qrels.set_defaults(func=cmd_qrels)
 
     p_synth = sub.add_parser("synth", help="синтетические запросы из корпуса (без query-логов)")
     p_synth.add_argument("--corpus", required=True, help="JSONL: {id, text, vector}")

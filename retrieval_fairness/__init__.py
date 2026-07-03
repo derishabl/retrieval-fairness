@@ -24,6 +24,7 @@ from retrieval_fairness.metrics import (
 from retrieval_fairness.probe import probe, ProbeResult
 from retrieval_fairness.diff import diff_reports, DiffReport
 from retrieval_fairness.serialize import save_probe, load_probe
+from retrieval_fairness.qrels import validate_qrels, QrelsValidation
 
 __all__ = [
     "__version__",
@@ -44,4 +45,6 @@ __all__ = [
     "DiffReport",
     "save_probe",
     "load_probe",
+    "validate_qrels",
+    "QrelsValidation",
 ]
