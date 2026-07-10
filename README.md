@@ -28,7 +28,23 @@ makes it measurable — and gateable in CI.
 ## Installation
 
 ```bash
-pip install -e .            # or pip install retrieval-fairness
+pip install retrieval-fairness
+```
+
+Optional store adapters are extras (installed only if you use them):
+
+```bash
+pip install 'retrieval-fairness[faiss]'       # FAISS
+pip install 'retrieval-fairness[pgvector]'    # pgvector (PostgreSQL)
+pip install 'retrieval-fairness[qdrant]'      # Qdrant
+pip install 'retrieval-fairness[models]'     # sentence-transformers embedder
+pip install 'retrieval-fairness[fastembed]'   # fastembed (BGE) embedder
+```
+
+From source (development):
+
+```bash
+pip install -e '.[dev]'
 ```
 
 ## Quick start
@@ -102,19 +118,22 @@ retrieval-fairness qrels --probe report.json --qrels qrels.json \
 ## How it works
 
 - `retrieval_fairness/types.py` — the `VectorStore` contract (Protocol).
-  Any store (FAISS, Qdrant, Pinecone, pgvector) is bridged to it via
-  an adapter.
-- `stores.py` — `InMemoryVectorStore` for dev/tests/demos.
+  Any store is bridged to it via an adapter (InMemory, FAISS, pgvector,
+  Qdrant today; Pinecone/Weaviate on the roadmap).
+- `adapters/inmemory.py` — `InMemoryVectorStore` (cosine, numpy) for
+  dev/tests/demos; `adapters/{faiss,pgvector,qdrant}.py` — store adapters.
 - `metrics.py` — coverage, gini, lorenz, hub_capture, FairnessReport.
 - `probe.py` — run a workload → retrieval frequency → report.
 - `diff.py` — regression diff between two runs.
 - `gate.py` — CI gate with configurable rules.
-- `synth.py` — synthetic queries generated from the corpus.
+- `synth.py` — antihub self-query audit (synthetic queries from the corpus).
+- `qrels.py` — dark-matter vs qrels cross-check ("lost gold").
 - `dashboard.py` — self-contained HTML report (Lorenz, histogram, PCA map).
+- `embedders.py` — Embedder contract (TF-IDF / sentence-transformers / fastembed).
 
 Real-scale case study (BEIR NQ, ~50% dark matter, lexical→dense
-regression diff): `docs/case_study_nq.md`. Store adapters:
-`docs/adapters.md`. Comparison with related work: `docs/comparison.md`.
+regression diff): `docs/case_study_nq.md`. Store adapters: `docs/adapters.md`.
+Comparison with related work: `docs/comparison.md`.
 
 ## Tests
 

@@ -2,7 +2,7 @@
 types.py — контракты retrieval_fairness.
 
 VectorStore — нейтральный интерфейс векторного хранилища. Любой стор
-(FAISS, Qdrant, Pinecone, pgvector) приводится к нему адаптером.
+(FAISS, Qdrant, pgvector, ...) приводится к нему адаптером.
 Раннеру всё равно, какой стор; метрики работают поверх search().
 """
 
