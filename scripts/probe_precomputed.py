@@ -32,8 +32,11 @@ from retrieval_fairness.serialize import save_probe
 
 def main() -> int:
     ap = argparse.ArgumentParser(description="Probe on precomputed vectors")
-    ap.add_argument("--dir", required=True,
-                    help="каталог с corpus_vecs.npy, corpus_ids.json, query_vecs.npy, queries.jsonl")
+    ap.add_argument(
+        "--dir",
+        required=True,
+        help="каталог с corpus_vecs.npy, corpus_ids.json, query_vecs.npy, queries.jsonl",
+    )
     ap.add_argument("--top-k", type=int, default=10)
     ap.add_argument("--out", required=True, help="prefix для .json/.faiss")
     ap.add_argument("--html", help="HTML dashboard (на больших корпусах PCA медленный)")
@@ -64,8 +67,9 @@ def main() -> int:
     build_flat_index(chunk_arr.tolist(), ids, idx_path, ids_map, metric="ip")
     print(f"index built in {time.time() - t0:.0f}s")
 
-    queries = [Query(id=str(m["id"]), vector=v.tolist(), text=m.get("text", ""))
-               for m, v in zip(q_meta, q_arr)]
+    queries = [
+        Query(id=str(m["id"]), vector=v.tolist(), text=m.get("text", "")) for m, v in zip(q_meta, q_arr)
+    ]
     store = FaissAdapter(idx_path, ids_map)
     t0 = time.time()
     result = probe(store, queries, top_k=args.top_k, corpus_ids=ids)
@@ -77,8 +81,8 @@ def main() -> int:
 
     if args.html:
         from retrieval_fairness.dashboard import render_dashboard
-        render_dashboard(result, args.html,
-                         chunks_vectors=chunk_arr.tolist(), chunk_ids=ids)
+
+        render_dashboard(result, args.html, chunks_vectors=chunk_arr.tolist(), chunk_ids=ids)
         print(f"dashboard saved: {args.html}")
     return 0
 

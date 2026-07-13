@@ -59,6 +59,7 @@ def test_probe_explicit_corpus_ids():
 
 if __name__ == "__main__":
     import sys
+
     fns = [(n, f) for n, f in sorted(globals().items()) if n.startswith("test_") and callable(f)]
     passed = 0
     for name, fn in fns:

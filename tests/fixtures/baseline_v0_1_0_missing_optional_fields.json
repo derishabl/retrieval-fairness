@@ -1,0 +1,5 @@
+{
+  "freqs": {"A": 1, "B": 0},
+  "hits_per_query": [["A"]],
+  "report": {"top_k": 1}
+}

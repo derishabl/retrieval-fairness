@@ -1,4 +1,5 @@
 """test_synth.py — synthetic query generation."""
+
 from __future__ import annotations
 from retrieval_fairness.types import Chunk
 from retrieval_fairness.synth import synth_queries_from_corpus, synth_probe
@@ -51,6 +52,7 @@ def test_synth_probe_returns_report():
 
 if __name__ == "__main__":
     import sys
+
     fns = [(n, f) for n, f in sorted(globals().items()) if n.startswith("test_") and callable(f)]
     p = 0
     for name, fn in fns:

@@ -1,4 +1,5 @@
 """test_pgvector_adapter.py — pgvector adapter tests (skip without DATABASE_URL)."""
+
 from __future__ import annotations
 import os
 import pytest
@@ -13,6 +14,7 @@ pytestmark = pytest.mark.skipif(
 
 def test_pgvector_search_and_corpus_ids():
     from retrieval_fairness.adapters.pgvector import PgvectorAdapter
+
     adapter = PgvectorAdapter(database_url=PGV_URL, table="docs")
     # прогон простого поиска
     hits = adapter.search([1.0, 0.0, 0.0], top_k=3)
@@ -27,6 +29,7 @@ def test_pgvector_search_and_corpus_ids():
 
 if __name__ == "__main__":
     import sys
+
     fns = [(n, f) for n, f in sorted(globals().items()) if n.startswith("test_") and callable(f)]
     p = 0
     for name, fn in fns:

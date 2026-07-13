@@ -101,7 +101,8 @@ def run_demo(top_k: int = 5) -> None:
     store = InMemoryVectorStore(chunks)
 
     result = probe(store, queries, top_k=top_k)
-    assert result.report is not None
+    if result.report is None:
+        raise RuntimeError("probe returned no report")
     print(result.report)
 
     # покажем dark matter явно

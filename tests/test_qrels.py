@@ -1,4 +1,5 @@
 """test_qrels.py — qrels 'lost gold' cross-check (first-class feature)."""
+
 from __future__ import annotations
 import json
 import os
@@ -10,9 +11,10 @@ from retrieval_fairness.qrels import validate_qrels, QrelsValidation
 def _write(d, name, obj):
     path = os.path.join(d, name)
     if name.endswith(".json"):
-        json.dump(obj, open(path, "w"))
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(obj, f)
     else:
-        with open(path, "w") as f:
+        with open(path, "w", encoding="utf-8") as f:
             for qid in obj:
                 f.write(json.dumps({"id": qid}) + "\n")
     return path
@@ -23,8 +25,11 @@ def test_lost_gold_and_recall():
     with tempfile.TemporaryDirectory() as d:
         # corpus A,B,C,D; q1 hits A,B; q2 hits A. C,D = dark matter.
         # qrels: q1 relevant to C (lost gold); q2 relevant to A (found).
-        probe = {"freqs": {"A": 2, "B": 1, "C": 0, "D": 0},
-                 "hits_per_query": [["A", "B"], ["A"]], "report": {}}
+        probe = {
+            "freqs": {"A": 2, "B": 1, "C": 0, "D": 0},
+            "hits_per_query": [["A", "B"], ["A"]],
+            "report": {},
+        }
         qrels = {"q1": {"C": 1}, "q2": {"A": 1}}
         pp = _write(d, "probe.json", probe)
         qp = _write(d, "qrels.json", qrels)
@@ -34,25 +39,26 @@ def test_lost_gold_and_recall():
 
     assert isinstance(res, QrelsValidation)
     assert res.dark_matter == 2
-    assert res.relevant_in_corpus == 2          # A and C
-    assert res.dark_and_relevant == 1           # C
+    assert res.relevant_in_corpus == 2  # A and C
+    assert res.dark_and_relevant == 1  # C
     assert res.dark_relevant_ids == ["C"]
     assert res.dark_relevant_pct_of_relevant == 0.5
     assert res.qrels_pairs_total == 2
-    assert res.qrels_pairs_in_topk == 1         # A found, C not
+    assert res.qrels_pairs_in_topk == 1  # A found, C not
     assert res.recall_at_k == 0.5
 
 
 def test_to_dict_roundtrips():
-    v = QrelsValidation(10, 5, 4, 3, 2, 0.5, 0.67, 3, 1, round(1/3, 4), ["x"])
+    v = QrelsValidation(10, 5, 4, 3, 2, 0.5, 0.67, 3, 1, round(1 / 3, 4), ["x"])
     d = v.to_dict()
     assert d["dark_and_relevant"] == 2
-    assert d["recall_at_k"] == round(1/3, 4)
+    assert d["recall_at_k"] == round(1 / 3, 4)
     assert d["dark_relevant_ids"] == ["x"]
 
 
 def test_mismatched_queries_raises():
     import pytest
+
     with tempfile.TemporaryDirectory() as d:
         probe = {"freqs": {"A": 1}, "hits_per_query": [["A"]], "report": {}}
         pp = _write(d, "probe.json", probe)

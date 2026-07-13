@@ -18,6 +18,7 @@ import numpy as np
 @runtime_checkable
 class Embedder(Protocol):
     """Контракт эмбеддера: fit на корпусе, encode произвольных текстов."""
+
     def fit(self, texts: list[str]) -> "Embedder": ...
     def encode(self, texts: list[str]) -> np.ndarray: ...
     @property
@@ -37,9 +38,9 @@ class TfidfEmbedder:
     # порог предупреждения: оценка dense-матрицы в байтах (float64)
     _DENSE_WARN_BYTES = 2 * 1024**3  # 2 GB
 
-    def __init__(self, ngram_range: tuple[int, int] = (1, 1),
-                 max_features: int | None = None):
+    def __init__(self, ngram_range: tuple[int, int] = (1, 1), max_features: int | None = None):
         from sklearn.feature_extraction.text import TfidfVectorizer
+
         self._vec = TfidfVectorizer(ngram_range=ngram_range, max_features=max_features)
         self._fitted = False
         self._dim_val = 0
@@ -59,7 +60,8 @@ class TfidfEmbedder:
                 f"TfidfEmbedder.encode: dense-матрица ~{est / 1024**3:.1f} GB "
                 f"({len(texts)} текстов × {self._dim_val} измерений). "
                 "Риск OOM — задайте max_features (например 4096).",
-                ResourceWarning, stacklevel=2,
+                ResourceWarning,
+                stacklevel=2,
             )
         return self._vec.transform(texts).toarray().astype(float)
 
@@ -108,9 +110,7 @@ class FastembedEmbedder:
         try:
             from fastembed import TextEmbedding
         except ImportError as e:
-            raise ImportError(
-                "FastembedEmbedder requires fastembed: pip install fastembed"
-            ) from e
+            raise ImportError("FastembedEmbedder requires fastembed: pip install fastembed") from e
         self._model = TextEmbedding(model_name=model_name)
         # dim узнаётся лениво при первом encode
         self._dim_val: int | None = None

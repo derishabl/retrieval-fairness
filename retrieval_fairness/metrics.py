@@ -13,6 +13,18 @@ Product-упаковка (coverage %, dark-matter %, hub-capture ratio) — на
 from __future__ import annotations
 from dataclasses import dataclass, field
 
+from retrieval_fairness.validation import (
+    require_non_negative_int,
+    require_positive_int,
+    validate_unique_ids,
+)
+
+
+def _validate_freqs(freqs: dict[str, int]) -> None:
+    validate_unique_ids(list(freqs), name="frequency IDs")
+    for chunk_id, value in freqs.items():
+        require_non_negative_int(value, f"frequency[{chunk_id!r}]")
+
 
 def retrieval_frequencies(hits_per_query: list[list[str]], corpus_ids: list[str]) -> dict[str, int]:
     """
@@ -21,11 +33,14 @@ def retrieval_frequencies(hits_per_query: list[list[str]], corpus_ids: list[str]
     hits_per_query: список top-k (id чанков) на каждый запрос.
     corpus_ids: все id корпуса (включая ни разу не найденные).
     """
+    validate_unique_ids(corpus_ids, name="corpus_ids")
     freqs = {cid: 0 for cid in corpus_ids}
-    for hits in hits_per_query:
+    for query_index, hits in enumerate(hits_per_query):
+        validate_unique_ids(hits, name=f"hits_per_query[{query_index}]")
         for cid in hits:
-            if cid in freqs:
-                freqs[cid] += 1
+            if cid not in freqs:
+                raise ValueError(f"hit ID {cid!r} is not present in corpus_ids")
+            freqs[cid] += 1
     return freqs
 
 
@@ -34,6 +49,7 @@ def coverage(freqs: dict[str, int]) -> float:
     Coverage % — доля корпуса, найденная хотя бы раз.
     1.0 = все чанки находятся; 0.5 = половина ни разу не нашлась.
     """
+    _validate_freqs(freqs)
     if not freqs:
         return 0.0
     found = sum(1 for v in freqs.values() if v > 0)
@@ -60,6 +76,7 @@ def gini(freqs: dict[str, int]) -> float:
     Формула: G = (Σ_i Σ_j |x_i - x_j|) / (2 * n * Σ x_i).
     Заимствовано из экономики / IR-fairness.
     """
+    _validate_freqs(freqs)
     vals = list(freqs.values())
     n = len(vals)
     if n == 0:
@@ -82,6 +99,7 @@ def lorenz(freqs: dict[str, int]) -> list[tuple[float, float]]:
     от беднейших к богатейшим. (0,0) ... (1,1).
     Диагональ = равенство; провисание = неравенство.
     """
+    _validate_freqs(freqs)
     vals = sorted(freqs.values())
     n = len(vals)
     if n == 0:
@@ -102,6 +120,8 @@ def hub_capture(freqs: dict[str, int], top_n: int = 5) -> float:
     Hub-capture ratio — доля всего exposure, приходящаяся на top-N хабов.
     1.0 = всё попадает в N чанков; ~0 = хабов нет.
     """
+    require_positive_int(top_n, "top_n")
+    _validate_freqs(freqs)
     vals = sorted(freqs.values(), reverse=True)
     total = sum(vals)
     if total == 0:
@@ -111,6 +131,8 @@ def hub_capture(freqs: dict[str, int], top_n: int = 5) -> float:
 
 def hub_leaderboard(freqs: dict[str, int], top_n: int = 10) -> list[tuple[str, int]]:
     """Top-N хабов по частоте попадания в top-k."""
+    require_non_negative_int(top_n, "top_n")
+    _validate_freqs(freqs)
     return sorted(freqs.items(), key=lambda kv: kv[1], reverse=True)[:top_n]
 
 
@@ -135,6 +157,7 @@ def reachability_ceiling(n_chunks: int, n_queries: int, top_k: int) -> int:
 @dataclass
 class FairnessReport:
     """Сводный отчёт по метрикам exposure."""
+
     n_chunks: int
     n_queries: int
     top_k: int
@@ -182,11 +205,11 @@ class FairnessReport:
             f"  Запросов: {self.n_queries}",
             f"  top-k:    {self.top_k}",
             "-" * 64,
-            f"  Coverage:     {self.coverage_pct*100:6.2f}%   (доля корпуса, что находится)",
-            f"  из достижимого: {self.coverage_of_ceiling*100:6.2f}%   (от workload-потолка {self.reachability_ceiling} чанков)",
-            f"  Dark matter:  {self.dark_matter_pct*100:6.2f}%   (доля, что НИ РАЗУ не нашлась)",
+            f"  Coverage:     {self.coverage_pct * 100:6.2f}%   (доля корпуса, что находится)",
+            f"  из достижимого: {self.coverage_of_ceiling * 100:6.2f}%   (от workload-потолка {self.reachability_ceiling} чанков)",
+            f"  Dark matter:  {self.dark_matter_pct * 100:6.2f}%   (доля, что НИ РАЗУ не нашлась)",
             f"  Gini:         {self.gini:.3f}   (0=равномерно, 1=концентрация)",
-            f"  Hub capture:  top5={self.hub_capture_top5*100:5.1f}%  top10={self.hub_capture_top10*100:5.1f}%",
+            f"  Hub capture:  top5={self.hub_capture_top5 * 100:5.1f}%  top10={self.hub_capture_top10 * 100:5.1f}%",
             "-" * 64,
             "  Top хабы (id: сколько раз в top-k):",
         ]
@@ -223,6 +246,10 @@ def build_report(
     leaderboard_n: int = 10,
 ) -> FairnessReport:
     """Собрать сводный FairnessReport из retrieval-frequency."""
+    _validate_freqs(freqs)
+    require_non_negative_int(n_queries, "n_queries")
+    require_positive_int(top_k, "top_k")
+    require_non_negative_int(leaderboard_n, "leaderboard_n")
     n = len(freqs)
     dm_ids = [cid for cid, v in freqs.items() if v == 0]
     return FairnessReport(

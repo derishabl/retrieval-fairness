@@ -1,4 +1,5 @@
 """test_serialize.py — probe save/load round-trip."""
+
 from __future__ import annotations
 import tempfile
 import os
@@ -54,6 +55,7 @@ def test_roundtrip_preserves_lorenz_and_dark_matter_ids():
 def test_roundtrip_diff_matches():
     """diff(original, loaded) должен быть нулевым."""
     from retrieval_fairness.diff import diff_reports
+
     store, queries = _toy()
     result = probe(store, queries, top_k=2)
     with tempfile.TemporaryDirectory() as d:
@@ -68,6 +70,7 @@ def test_roundtrip_diff_matches():
 
 if __name__ == "__main__":
     import sys
+
     fns = [(n, f) for n, f in sorted(globals().items()) if n.startswith("test_") and callable(f)]
     p = 0
     for name, fn in fns:

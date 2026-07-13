@@ -26,12 +26,18 @@ def main() -> int:
     ap = argparse.ArgumentParser(description="Validate dark matter against qrels (lost gold + recall@k)")
     ap.add_argument("--probe", required=True, help="save_probe JSON (probe --json / case_run --out)")
     ap.add_argument("--qrels", required=True, help="qrels.json: {query_id: {doc_id: grade}}")
-    ap.add_argument("--queries", required=True, help="queries.jsonl (line order = probe hit order)")
+    ap.add_argument("--queries", help="queries.jsonl (required only for legacy schema v1)")
+    ap.add_argument("--min-relevance-grade", type=int, default=1)
     ap.add_argument("--json", help="export the validation result as JSON")
     args = ap.parse_args()
 
     try:
-        res = validate_qrels(args.probe, args.qrels, args.queries)
+        res = validate_qrels(
+            args.probe,
+            args.qrels,
+            args.queries,
+            min_relevance_grade=args.min_relevance_grade,
+        )
     except ValueError as e:
         print(f"ERROR: {e}", file=sys.stderr)
         return 2

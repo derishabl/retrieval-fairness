@@ -27,8 +27,7 @@ _ALLOWED_DISTANCE_OPS = {"<=>", "<->", "<#>"}  # cosine / L2 / inner product
 def _validate_ident(value: str, field: str) -> str:
     if not _IDENT_RE.fullmatch(value):
         raise ValueError(
-            f"pgvector: {field}={value!r} не валидный SQL-идентификатор "
-            f"(допустимы [A-Za-z_][A-Za-z0-9_.]*)"
+            f"pgvector: {field}={value!r} не валидный SQL-идентификатор (допустимы [A-Za-z_][A-Za-z0-9_.]*)"
         )
     return value
 
@@ -77,6 +76,7 @@ class PgvectorAdapter(BaseVectorStoreAdapter):
         # в накладных расходах на тысячах запросов. Переподключаемся,
         # если соединение закрыто (таймаут/обрыв).
         import psycopg
+
         if self._conn is None or self._conn.closed:
             self._conn = psycopg.connect(self._database_url, autocommit=True)
         return self._conn

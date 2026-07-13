@@ -49,8 +49,9 @@ def main() -> int:
     dev = str(getattr(model, "device", "?"))
     print(f"model={args.model} device={dev}")
     if "cuda" not in dev:
-        print("WARNING: GPU не виден — encode будет медленным. "
-              "Colab: Runtime -> Change runtime type -> T4 GPU.")
+        print(
+            "WARNING: GPU не виден — encode будет медленным. Colab: Runtime -> Change runtime type -> T4 GPU."
+        )
 
     # --- корпус ---
     print("loading corpus...")
@@ -65,8 +66,7 @@ def main() -> int:
     print(f"corpus: {len(ids)} chunks")
 
     t0 = time.time()
-    vecs = model.encode(texts, batch_size=args.batch_size,
-                        normalize_embeddings=True, show_progress_bar=True)
+    vecs = model.encode(texts, batch_size=args.batch_size, normalize_embeddings=True, show_progress_bar=True)
     print(f"corpus encoded in {time.time() - t0:.0f}s")
     np.save(os.path.join(args.out, "corpus_vecs.npy"), np.asarray(vecs, dtype=np.float32))
     with open(os.path.join(args.out, "corpus_ids.json"), "w", encoding="utf-8") as f:
@@ -91,8 +91,9 @@ def main() -> int:
     q_texts = [qid_to_text.get(q, q) for q in qids]
     print(f"queries: {len(qids)}")
 
-    q_vecs = model.encode(q_texts, batch_size=args.batch_size,
-                          normalize_embeddings=True, show_progress_bar=True)
+    q_vecs = model.encode(
+        q_texts, batch_size=args.batch_size, normalize_embeddings=True, show_progress_bar=True
+    )
     np.save(os.path.join(args.out, "query_vecs.npy"), np.asarray(q_vecs, dtype=np.float32))
     with open(os.path.join(args.out, "queries.jsonl"), "w", encoding="utf-8") as f:
         for qid, txt in zip(qids, q_texts):
@@ -102,8 +103,10 @@ def main() -> int:
 
     total_mb = sum(os.path.getsize(os.path.join(args.out, n)) for n in os.listdir(args.out)) / 2**20
     print(f"done -> {args.out}/ ({total_mb:.0f} MB). Скачайте каталог и запустите локально:")
-    print(f"  python scripts/probe_precomputed.py --dir {args.out} --top-k 10 "
-          f"--out cases/nq_full_bge --html cases/nq_full_bge.html")
+    print(
+        f"  python scripts/probe_precomputed.py --dir {args.out} --top-k 10 "
+        f"--out cases/nq_full_bge --html cases/nq_full_bge.html"
+    )
     return 0
 
 

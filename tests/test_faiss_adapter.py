@@ -1,4 +1,5 @@
 """test_faiss_adapter.py — FAISS adapter vs InMemory consistency."""
+
 from __future__ import annotations
 import tempfile
 import os
@@ -12,13 +13,16 @@ from retrieval_fairness.probe import probe
 
 def _toy():
     # нормализованные векторы, чтобы IP == cosine
-    vecs = np.array([
-        [1.0, 0.0],
-        [1.0, 0.01],
-        [0.0, 1.0],
-        [0.0, -1.0],
-        [0.9, 0.1],
-    ], dtype="float32")
+    vecs = np.array(
+        [
+            [1.0, 0.0],
+            [1.0, 0.01],
+            [0.0, 1.0],
+            [0.0, -1.0],
+            [0.9, 0.1],
+        ],
+        dtype="float32",
+    )
     ids = ["a", "b", "c", "d", "e"]
     queries = [
         Query(id="q1", vector=[1.0, 0.0]),
@@ -80,6 +84,7 @@ def test_faiss_ids_map_length_mismatch():
         build_flat_index(vecs.tolist(), ids, ip, mp)
         # испортить ids-map
         import json
+
         with open(mp, "w") as f:
             json.dump({"ids": ["a", "b"]}, f)  # длина 2, индекс 5
         try:
@@ -91,6 +96,7 @@ def test_faiss_ids_map_length_mismatch():
 
 if __name__ == "__main__":
     import sys
+
     fns = [(n, f) for n, f in sorted(globals().items()) if n.startswith("test_") and callable(f)]
     p = 0
     for name, fn in fns:

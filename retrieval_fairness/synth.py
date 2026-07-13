@@ -26,6 +26,7 @@ import numpy as np
 from sklearn.feature_extraction.text import TfidfVectorizer
 
 from retrieval_fairness.types import Chunk, Query
+from retrieval_fairness.validation import require_positive_int, validate_unique_ids
 
 
 def _keyword_query(text: str, vec: TfidfVectorizer, n_terms: int = 5) -> str:
@@ -56,6 +57,13 @@ def synth_queries_from_corpus(
       "keywords" — top-N TF-IDF терминов чанка (по умолчанию)
       "text"     — первые 60 символов чанка (как «цитатный» запрос)
     """
+    require_positive_int(n_per_chunk, "n_per_chunk")
+    require_positive_int(n_terms, "n_terms")
+    if not chunks:
+        raise ValueError("chunks must not be empty")
+    validate_unique_ids([chunk.id for chunk in chunks], name="corpus IDs")
+    if query_style not in {"keywords", "text"}:
+        raise ValueError("query_style must be 'keywords' or 'text'")
     texts = [c.text for c in chunks]
     vec = TfidfVectorizer()
     vec.fit(texts)
@@ -89,6 +97,7 @@ def synth_probe(
     from retrieval_fairness.adapters import InMemoryVectorStore
     from retrieval_fairness.probe import probe
 
+    require_positive_int(top_k, "top_k")
     queries, vec = synth_queries_from_corpus(
         chunks, n_per_chunk=n_per_chunk, n_terms=n_terms, query_style=query_style
     )

@@ -76,7 +76,9 @@ def run_case(
     chunk_vecs = emb.encode(texts)
     print("[case] encoding queries...")
     query_vecs = emb.encode(q_texts)
-    queries_vec = [Query(id=q["id"], vector=v.tolist(), text=q.get("text", "")) for q, v in zip(queries, query_vecs)]
+    queries_vec = [
+        Query(id=q["id"], vector=v.tolist(), text=q.get("text", "")) for q, v in zip(queries, query_vecs)
+    ]
 
     # 2. FAISS index
     os.makedirs(os.path.dirname(out_prefix) or ".", exist_ok=True)
@@ -102,9 +104,8 @@ def run_case(
     # 5. dashboard (with vectors for PCA)
     if html_path:
         from retrieval_fairness.dashboard import render_dashboard
-        render_dashboard(result, html_path,
-                         chunks_vectors=chunk_arr.tolist(),
-                         chunk_ids=ids)
+
+        render_dashboard(result, html_path, chunks_vectors=chunk_arr.tolist(), chunk_ids=ids)
         print(f"[case] dashboard saved: {html_path}")
 
 
@@ -116,16 +117,21 @@ def main() -> int:
     ap.add_argument("--top-k", type=int, default=10)
     ap.add_argument("--out", required=True, help="prefix for outputs (no extension)")
     ap.add_argument("--html", help="path for HTML dashboard")
-    ap.add_argument("--max-features", type=int, default=None,
-                    help="tfidf: ограничить словарь (обязательно для больших корпусов, иначе OOM)")
+    ap.add_argument(
+        "--max-features",
+        type=int,
+        default=None,
+        help="tfidf: ограничить словарь (обязательно для больших корпусов, иначе OOM)",
+    )
     args = ap.parse_args()
     corpus = load_corpus(args.corpus)
     queries = load_queries(args.queries)
     if args.embedder == "tfidf" and args.max_features is None and len(corpus) > 20000:
-        print(f"WARNING: tfidf на {len(corpus)} чанках без --max-features — риск OOM "
-              "(dense-матрица под FAISS). Рекомендуется --max-features 4096.")
-    run_case(corpus, queries, args.embedder, args.top_k, args.out, args.html,
-             max_features=args.max_features)
+        print(
+            f"WARNING: tfidf на {len(corpus)} чанках без --max-features — риск OOM "
+            "(dense-матрица под FAISS). Рекомендуется --max-features 4096."
+        )
+    run_case(corpus, queries, args.embedder, args.top_k, args.out, args.html, max_features=args.max_features)
     return 0
 
 

@@ -30,15 +30,20 @@ def get_adapter(name: str, **conn) -> BaseVectorStoreAdapter:
         return InMemoryVectorStore(chunks)
     if name == "faiss":
         from retrieval_fairness.adapters.faiss import FaissAdapter
+
         return FaissAdapter(index_path=conn["index_path"], ids_map_path=conn.get("ids_map_path"))
     if name == "pgvector":
         from retrieval_fairness.adapters.pgvector import PgvectorAdapter
-        return PgvectorAdapter(database_url=conn["database_url"], table=conn.get("table", "docs"),
-                               column=conn.get("column", "embedding"))
+
+        return PgvectorAdapter(
+            database_url=conn["database_url"],
+            table=conn.get("table", "docs"),
+            column=conn.get("column", "embedding"),
+        )
     if name == "qdrant":
         from retrieval_fairness.adapters.qdrant import QdrantAdapter
-        return QdrantAdapter(url=conn["url"], collection=conn["collection"],
-                             api_key=conn.get("api_key"))
+
+        return QdrantAdapter(url=conn["url"], collection=conn["collection"], api_key=conn.get("api_key"))
     raise ValueError(f"unknown adapter: {name}")
 
 

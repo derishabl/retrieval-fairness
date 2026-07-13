@@ -11,7 +11,7 @@ JMLR 2010) и README «Why your index has dark matter».
 (coverage, Gini, dark-matter, hub-capture) + CLI probe.
 """
 
-__version__ = "0.1.0"
+__version__ = "0.1.1"
 
 from retrieval_fairness.types import Chunk, Hit, Query, VectorStore
 from retrieval_fairness.adapters import InMemoryVectorStore

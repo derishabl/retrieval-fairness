@@ -64,8 +64,8 @@ def test_search_passes_raw_vector_and_default_using(monkeypatch):
     hits = a.search([0.1, 0.2], top_k=2)
 
     call = recorded["call"]
-    assert call["query"] == [0.1, 0.2]          # сырой вектор, не обёртка
-    assert call["using"] is None                # default vector
+    assert call["query"] == [0.1, 0.2]  # сырой вектор, не обёртка
+    assert call["using"] is None  # default vector
     assert call["collection_name"] == "col"
     assert call["limit"] == 2
     assert [h.chunk_id for h in hits] == ["a", "b"]
@@ -81,8 +81,8 @@ def test_search_named_vector_uses_using(monkeypatch):
     a.search([0.3], top_k=1)
 
     call = recorded["call"]
-    assert call["query"] == [0.3]               # вектор НЕ заворачивается в dict
-    assert call["using"] == "image"             # named vector -> using=
+    assert call["query"] == [0.3]  # вектор НЕ заворачивается в dict
+    assert call["using"] == "image"  # named vector -> using=
 
 
 def test_client_is_reused_across_searches(monkeypatch):
@@ -93,7 +93,7 @@ def test_client_is_reused_across_searches(monkeypatch):
     a = QdrantAdapter(url="http://x:6333", collection="col")
     a.search([0.1], top_k=1)
     a.search([0.2], top_k=1)
-    assert recorded["n_clients"] == 1           # один клиент на весь workload
+    assert recorded["n_clients"] == 1  # один клиент на весь workload
 
     a.close()
     assert recorded.get("closed") is True

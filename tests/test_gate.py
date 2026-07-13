@@ -1,4 +1,5 @@
 """test_gate.py — CI gate rules."""
+
 from __future__ import annotations
 import tempfile
 import os
@@ -34,8 +35,9 @@ def test_gate_passes_when_no_regression():
     with tempfile.TemporaryDirectory() as d:
         b = _save(good, d, "b.json")
         c = _save(good, d, "c.json")
-        res = evaluate_gate(b, c, max_coverage_drop=0.05, max_dark_matter_rise=0.05,
-                            max_gini_rise=0.1, min_query_overlap=0.8)
+        res = evaluate_gate(
+            b, c, max_coverage_drop=0.05, max_dark_matter_rise=0.05, max_gini_rise=0.1, min_query_overlap=0.8
+        )
     assert res.passed is True
     assert all(r.passed for r in res.rules)
 
@@ -58,7 +60,7 @@ def test_gate_fails_when_coverage_actually_drops():
     chunks = [
         Chunk(id="A", text="a", vector=[1.0, 0.0]),
         Chunk(id="B", text="b", vector=[1.0, 0.01]),
-        Chunk(id="C", text="c", vector=[0.9, 0.0]),   # близко к A
+        Chunk(id="C", text="c", vector=[0.9, 0.0]),  # близко к A
         Chunk(id="D", text="d", vector=[0.9, 0.01]),  # близко к B
     ]
     queries = [Query(id="q1", vector=[1.0, 0.0]), Query(id="q2", vector=[1.0, 0.005])]
@@ -144,8 +146,9 @@ def test_gate_validates_all_threshold_ranges():
         b = _save(base, d, "b.json")
         c = _save(base, d, "c.json")
         # граница 1.0 и 0.0 — валидны
-        evaluate_gate(b, c, max_coverage_drop=1.0, max_dark_matter_rise=1.0,
-                      max_gini_rise=1.0, min_query_overlap=0.0)
+        evaluate_gate(
+            b, c, max_coverage_drop=1.0, max_dark_matter_rise=1.0, max_gini_rise=1.0, min_query_overlap=0.0
+        )
         # gini_rise > 1.0 — невалиден
         try:
             evaluate_gate(b, c, max_gini_rise=2.0)
@@ -162,6 +165,7 @@ def test_probe_to_gate_end_to_end_cli(tmp_path=None):
     import os
     import tempfile
     from retrieval_fairness.serialize import save_probe
+
     chunks = _real_drop_chunks()
     queries = _real_drop_queries()
     base = probe(InMemoryVectorStore(chunks), queries, top_k=4)
@@ -169,7 +173,7 @@ def test_probe_to_gate_end_to_end_cli(tmp_path=None):
     with tempfile.TemporaryDirectory() as d:
         bp = os.path.join(d, "base.json")
         cp = os.path.join(d, "cand.json")
-        save_probe(base, bp)   # то, что делает probe --json после фикса
+        save_probe(base, bp)  # то, что делает probe --json после фикса
         save_probe(cand, cp)
         # gate грузит через load_probe — должно работать
         res = evaluate_gate(bp, cp, max_coverage_drop=0.05, max_dark_matter_rise=0.05)
@@ -179,6 +183,7 @@ def test_probe_to_gate_end_to_end_cli(tmp_path=None):
 
 if __name__ == "__main__":
     import sys
+
     fns = [(n, f) for n, f in sorted(globals().items()) if n.startswith("test_") and callable(f)]
     p = 0
     for name, fn in fns:

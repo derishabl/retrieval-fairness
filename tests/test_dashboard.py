@@ -1,4 +1,5 @@
 """test_dashboard.py — HTML dashboard generation."""
+
 from __future__ import annotations
 import tempfile
 import os
@@ -25,11 +26,12 @@ def test_dashboard_writes_html_file():
     result = probe(store, queries, top_k=2)
     with tempfile.TemporaryDirectory() as d:
         path = os.path.join(d, "report.html")
-        render_dashboard(result, path,
-                         chunks_vectors=[c.vector for c in chunks],
-                         chunk_ids=[c.id for c in chunks])
+        render_dashboard(
+            result, path, chunks_vectors=[c.vector for c in chunks], chunk_ids=[c.id for c in chunks]
+        )
         assert os.path.exists(path)
-        content = open(path, encoding="utf-8").read()
+        with open(path, encoding="utf-8") as file:
+            content = file.read()
     assert "<svg" in content  # есть Lorenz/histogram
     assert "Coverage" in content
     assert "A" in content  # хаб в таблице
@@ -46,14 +48,13 @@ def test_build_html_without_vectors():
 def test_build_html_with_pca():
     chunks, queries = _toy()
     result = probe(InMemoryVectorStore(chunks), queries, top_k=2)
-    html_str = build_html(result,
-                          chunks_vectors=[c.vector for c in chunks],
-                          chunk_ids=[c.id for c in chunks])
+    html_str = build_html(result, chunks_vectors=[c.vector for c in chunks], chunk_ids=[c.id for c in chunks])
     assert "PCA" in html_str
 
 
 if __name__ == "__main__":
     import sys
+
     fns = [(n, f) for n, f in sorted(globals().items()) if n.startswith("test_") and callable(f)]
     p = 0
     for name, fn in fns:

@@ -1,8 +1,12 @@
 """test_diff.py — regression diff tests."""
+
 from __future__ import annotations
 from retrieval_fairness.diff import (
-    per_chunk_delta, newly_dark_matter, rescued_from_dark_matter,
-    per_query_overlap, diff_reports,
+    per_chunk_delta,
+    newly_dark_matter,
+    rescued_from_dark_matter,
+    per_query_overlap,
+    diff_reports,
 )
 from retrieval_fairness.probe import ProbeResult
 from retrieval_fairness.metrics import FairnessReport
@@ -13,9 +17,14 @@ def _mock_result(freqs, hits, cov, dm, gini=0.3, hub5=0.4) -> ProbeResult:
         freqs=freqs,
         hits_per_query=hits,
         report=FairnessReport(
-            n_chunks=len(freqs), n_queries=len(hits), top_k=5,
-            coverage_pct=cov, dark_matter_pct=dm, gini=gini,
-            hub_capture_top5=hub5, hub_capture_top10=0.5,
+            n_chunks=len(freqs),
+            n_queries=len(hits),
+            top_k=5,
+            coverage_pct=cov,
+            dark_matter_pct=dm,
+            gini=gini,
+            hub_capture_top5=hub5,
+            hub_capture_top10=0.5,
         ),
     )
 
@@ -94,6 +103,7 @@ def test_diff_reports_to_dict():
 
 if __name__ == "__main__":
     import sys
+
     fns = [(n, f) for n, f in sorted(globals().items()) if n.startswith("test_") and callable(f)]
     p = 0
     for name, fn in fns:

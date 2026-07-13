@@ -1,0 +1,14 @@
+{
+  "freqs": {"A": 2, "B": 1, "C": 0},
+  "hits_per_query": [["A", "B"], ["A"]],
+  "report": {
+    "n_chunks": 3,
+    "n_queries": 2,
+    "top_k": 2,
+    "coverage_pct": 0.6667,
+    "dark_matter_pct": 0.3333,
+    "gini": 0.4444,
+    "hub_capture_top5": 1.0,
+    "hub_capture_top10": 1.0
+  }
+}

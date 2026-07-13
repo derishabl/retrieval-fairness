@@ -1,4 +1,5 @@
 """test_adapters.py — adapter registry and base infrastructure."""
+
 from __future__ import annotations
 from retrieval_fairness.types import Chunk
 from retrieval_fairness.adapters import get_adapter, InMemoryVectorStore, BaseVectorStoreAdapter
@@ -32,6 +33,7 @@ def test_corpus_ids_cached():
 def test_base_search_not_implemented():
     class Dummy(Base):
         pass
+
     try:
         Dummy().search([1.0], 1)
         assert False
@@ -46,6 +48,7 @@ def test_inmemory_is_base():
 
 if __name__ == "__main__":
     import sys
+
     fns = [(n, f) for n, f in sorted(globals().items()) if n.startswith("test_") and callable(f)]
     p = 0
     for name, fn in fns:

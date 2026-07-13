@@ -12,6 +12,7 @@ import numpy as np
 
 from retrieval_fairness.types import Chunk, Hit
 from retrieval_fairness.adapters.base import BaseVectorStoreAdapter
+from retrieval_fairness.validation import validate_unique_ids, validate_vector
 
 
 def _cosine_matrix(query: np.ndarray, matrix: np.ndarray) -> np.ndarray:
@@ -33,22 +34,32 @@ class InMemoryVectorStore(BaseVectorStoreAdapter):
 
     def __init__(self, chunks: list[Chunk]):
         super().__init__()
-        assert all(c.vector is not None for c in chunks), "InMemoryVectorStore требует Chunk.vector"
         self._chunks = list(chunks)
         self._ids = [c.id for c in self._chunks]
-        self._matrix = np.array([c.vector for c in self._chunks], dtype=float)
+        validate_unique_ids(self._ids, name="corpus IDs")
+        dimensions: int | None = None
+        for index, chunk in enumerate(self._chunks):
+            if chunk.vector is None:
+                raise ValueError(f"chunks[{index}].vector is required")
+            validate_vector(chunk.vector, name=f"chunks[{index}].vector", dim=dimensions)
+            dimensions = len(chunk.vector) if dimensions is None else dimensions
+        self._dim = dimensions
+        self._matrix = (
+            np.array([c.vector for c in self._chunks], dtype=float)
+            if self._chunks
+            else np.empty((0, 0), dtype=float)
+        )
 
     def _search(self, query_vec: list[float], top_k: int) -> list[Hit]:
+        if self._dim is not None:
+            validate_vector(query_vec, name="query vector", dim=self._dim)
         sims = _cosine_matrix(np.array(query_vec, dtype=float), self._matrix)
         if sims.size == 0:
             return []
         k = min(top_k, sims.size)
         idx = np.argpartition(-sims, k - 1)[:k]
         idx = idx[np.argsort(-sims[idx])]
-        return [
-            Hit(chunk_id=self._ids[i], score=float(sims[i]), rank=r + 1)
-            for r, i in enumerate(idx)
-        ]
+        return [Hit(chunk_id=self._ids[i], score=float(sims[i]), rank=r + 1) for r, i in enumerate(idx)]
 
     def _list_chunk_ids(self) -> Iterator[str]:
         yield from self._ids

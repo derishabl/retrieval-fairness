@@ -14,14 +14,16 @@ from typing import Iterator, Protocol, runtime_checkable
 @dataclass(frozen=True)
 class Chunk:
     """Документ/чанк в корпусе."""
+
     id: str
     text: str
-    vector: list[float] | None = None   # опционально — для in-memory
+    vector: list[float] | None = None  # опционально — для in-memory
 
 
 @dataclass(frozen=True)
 class Hit:
     """Один результат поиска."""
+
     chunk_id: str
     score: float
     rank: int
@@ -30,6 +32,7 @@ class Hit:
 @dataclass(frozen=True)
 class Query:
     """Запрос workload'а. Вектор — уже эмбеддированный."""
+
     id: str
     vector: list[float]
     text: str = ""

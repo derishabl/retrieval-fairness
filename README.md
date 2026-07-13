@@ -80,7 +80,16 @@ retrieval-fairness synth --corpus corpus.jsonl --top-k 10 --html dashboard.html
 
 ```bash
 retrieval-fairness diff --baseline before.json --candidate after.json
+# For an intentional rechunking migration (different corpus fingerprint):
+retrieval-fairness diff --baseline before.json --candidate after.json \
+    --corpus-policy allow-change
 ```
+
+Baselines use schema v2 and contain ordered query IDs plus deterministic corpus
+and workload SHA-256 fingerprints. On load, reports are rebuilt from raw hits
+and frequencies; saved metric values are never trusted as source data. Legacy
+0.1.0 baselines remain readable, using positional query alignment only when
+explicitly allowed by strict overlap gates.
 
 ### CI gate
 
@@ -98,9 +107,15 @@ retriever never surfaces. No competitor exposure tool ships this:
 
 ```bash
 retrieval-fairness qrels --probe report.json --qrels qrels.json \
-    --queries queries.jsonl --json qrels_report.json
-# prints: lost gold count, recall@k, dark_relevant_ids
+    --min-relevance-grade 1 --json qrels_report.json
+# --queries is only required for a legacy schema-v1 probe
 ```
+
+A qrels pair is relevant only when `grade >= --min-relevance-grade` (default
+1), so zero and negative judgments are ignored. The output reports **micro
+recall@k** over all relevant query/document pairs and **macro recall@k** over
+queries that have at least one relevant in-corpus document. `recall_at_k` is
+retained as a compatibility alias for micro recall for the 0.1.x cycle.
 
 ## Metrics
 
@@ -113,7 +128,7 @@ retrieval-fairness qrels --probe report.json --qrels qrels.json \
 | Hub capture top5/10 | share of exposure captured by top-N hubs |
 | Lorenz curve | inequality visualization |
 | Per-query overlap | result stability across a migration |
-| Lost gold / Recall@k | dark-matter chunks that are actually relevant (qrels cross-check) |
+| Lost gold / micro & macro Recall@k | positive-relevance dark-matter chunks and qrels retrieval quality |
 
 ## How it works
 

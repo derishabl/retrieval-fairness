@@ -49,6 +49,7 @@ class QdrantAdapter(BaseVectorStoreAdapter):
         # в накладных расходах на тысячах запросов.
         if self._client_instance is None:
             from qdrant_client import QdrantClient
+
             self._client_instance = QdrantClient(url=self._url, api_key=self._api_key)
         return self._client_instance
 
@@ -60,6 +61,7 @@ class QdrantAdapter(BaseVectorStoreAdapter):
 
     def _search(self, query_vec: list[float], top_k: int) -> list[Hit]:
         from qdrant_client.models import SearchParams
+
         client = self._client()
         # client.search() deprecated в qdrant-client >=1.10 (убран в 2.x).
         # query_points() — современный API: query — сырой вектор,

@@ -1,4 +1,5 @@
 """test_embedders.py — Embedder contract + TfidfEmbedder."""
+
 from __future__ import annotations
 import os
 import pytest
@@ -38,6 +39,7 @@ def test_tfidf_max_features_caps_dim():
 
 def test_tfidf_warns_on_huge_dense_matrix():
     import warnings
+
     emb = TfidfEmbedder().fit(["alpha beta gamma"])
     emb._dim_val = 10**9  # симуляция огромного словаря без аллокации
     with warnings.catch_warnings(record=True) as w:
@@ -74,23 +76,30 @@ def test_get_embedder_sbert_passes_model_name():
     Проверяем, что model_name доходит до SentenceTransformerEmbedder. Без рабочей
     sentence-transformers — мокаем конструктор."""
     import retrieval_fairness.embedders as em
+
     captured = {}
+
     class _FakeST:
         def __init__(self, model_name=None):
             captured["model_name"] = model_name
+
         def get_sentence_embedding_dimension(self):
             return 384
+
         def encode(self, texts, show_progress_bar=False):
             return np.zeros((len(texts), 384))
+
     # подменяем класс в модуле, чтобы импорт внутри get_embedder подхватил
     import sys
     import types
+
     fake_module = types.ModuleType("sentence_transformers")
     fake_module.SentenceTransformer = _FakeST
     sys.modules["sentence_transformers"] = fake_module
     try:
         # перезагружаем, чтобы SentenceTransformerEmbedder использовал фейк
         import importlib
+
         importlib.reload(em)
         em.get_embedder("sbert", model_name="my-org/my-model")
         assert captured["model_name"] == "my-org/my-model"
@@ -109,6 +118,7 @@ def test_get_embedder_sbert_passes_model_name():
 )
 def test_minilm_optional():
     from retrieval_fairness.embedders import SentenceTransformerEmbedder
+
     emb = SentenceTransformerEmbedder()
     emb.fit(["test"])
     mat = emb.encode(["hello world"])
@@ -119,6 +129,7 @@ def test_minilm_optional():
 
 if __name__ == "__main__":
     import sys
+
     fns = [(n, f) for n, f in sorted(globals().items()) if n.startswith("test_") and callable(f)]
     p = 0
     for name, fn in fns:

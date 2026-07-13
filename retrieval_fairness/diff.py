@@ -1,113 +1,121 @@
-"""
-diff.py — regression diff между двумя прогонами probe.
-
-Сравнивает baseline и candidate (например, до и после смены эмбеддера):
-- per-chunk exposure delta (на сколько изменилась частота попадания в top-k)
-- chunks, ставшие dark matter (были найдены -> не нашлись)
-- chunks, вышедшие из dark matter
-- per-query top-k overlap (насколько изменилась выдача по запросам)
-- сводная дельта метрик (coverage, gini, hub-capture)
-
-Вход: два ProbeResult. Выход: DiffReport + текстовый/JSON вывод.
-"""
+"""Integrity-aware regression diff between two probe runs."""
 
 from __future__ import annotations
+
 from dataclasses import dataclass, field
 
+from retrieval_fairness.probe import ProbeResult
+from retrieval_fairness.validation import validate_unique_ids
 
-def per_chunk_delta(
-    baseline: dict[str, int], candidate: dict[str, int]
-) -> dict[str, int]:
-    """Delta retrieval-frequency по каждому чанку: candidate - baseline."""
+
+def per_chunk_delta(baseline: dict[str, int], candidate: dict[str, int]) -> dict[str, int]:
     keys = set(baseline) | set(candidate)
-    return {k: candidate.get(k, 0) - baseline.get(k, 0) for k in keys}
+    return {key: candidate.get(key, 0) - baseline.get(key, 0) for key in keys}
 
 
-def newly_dark_matter(
-    baseline: dict[str, int], candidate: dict[str, int]
-) -> list[str]:
-    """Чанки, которые находились в baseline, но стали dark matter в candidate."""
-    return [k for k in baseline if baseline[k] > 0 and candidate.get(k, 0) == 0]
+def newly_dark_matter(baseline: dict[str, int], candidate: dict[str, int]) -> list[str]:
+    return [key for key in baseline if baseline[key] > 0 and candidate.get(key, 0) == 0]
 
 
-def rescued_from_dark_matter(
-    baseline: dict[str, int], candidate: dict[str, int]
-) -> list[str]:
-    """Чанки, которые были dark matter в baseline, а теперь находятся."""
-    return [k for k in candidate if baseline.get(k, 0) == 0 and candidate[k] > 0]
+def rescued_from_dark_matter(baseline: dict[str, int], candidate: dict[str, int]) -> list[str]:
+    return [key for key in candidate if baseline.get(key, 0) == 0 and candidate[key] > 0]
+
+
+def _workload_mismatch(baseline_ids: list[str], candidate_ids: list[str]) -> ValueError:
+    baseline_set, candidate_set = set(baseline_ids), set(candidate_ids)
+    missing = sorted(baseline_set - candidate_set)
+    added = sorted(candidate_set - baseline_set)
+    return ValueError(
+        "query ID sets differ "
+        f"(baseline={len(baseline_ids)}, candidate={len(candidate_ids)}, "
+        f"missing={len(missing)} {missing[:5]!r}, added={len(added)} {added[:5]!r})"
+    )
 
 
 def per_query_overlap(
-    baseline_hits: list[list[str]], candidate_hits: list[list[str]]
+    baseline_hits: list[list[str]],
+    candidate_hits: list[list[str]],
+    baseline_query_ids: list[str] | None = None,
+    candidate_query_ids: list[str] | None = None,
 ) -> list[float]:
-    """
-    Per-query Jaccard overlap top-k между baseline и candidate.
-    1.0 = выдача не изменилась; 0.0 = полностью разная.
-    Список выровнен по индексу запроса (предполагается одинаковый порядок
-    и одинаковое число запросов).
+    """Return per-query Jaccard overlap, aligned by query ID when available."""
+    baseline_query_ids = baseline_query_ids or []
+    candidate_query_ids = candidate_query_ids or []
+    if bool(baseline_query_ids) != bool(candidate_query_ids):
+        raise ValueError("only one probe contains query IDs; workload alignment is unsafe")
 
-    Раньше использовался zip(), который при разном числе запросов молча
-    обрезает по короткому — это давал мусорный mean overlap. Теперь
-    разное число запросов = явная ошибка (тихо неверный результат хуже
-    падения).
-    """
-    if len(baseline_hits) != len(candidate_hits):
+    candidate_rows = candidate_hits
+    if baseline_query_ids:
+        validate_unique_ids(baseline_query_ids, name="baseline query IDs")
+        validate_unique_ids(candidate_query_ids, name="candidate query IDs")
+        if len(baseline_query_ids) != len(baseline_hits):
+            raise ValueError("baseline query IDs count does not match hits_per_query")
+        if len(candidate_query_ids) != len(candidate_hits):
+            raise ValueError("candidate query IDs count does not match hits_per_query")
+        if set(baseline_query_ids) != set(candidate_query_ids):
+            raise _workload_mismatch(baseline_query_ids, candidate_query_ids)
+        candidate_by_id = dict(zip(candidate_query_ids, candidate_hits))
+        candidate_rows = [candidate_by_id[qid] for qid in baseline_query_ids]
+    elif len(baseline_hits) != len(candidate_hits):
         raise ValueError(
-            f"per_query_overlap: число запросов отличается "
-            f"(baseline={len(baseline_hits)}, candidate={len(candidate_hits)}). "
-            f"Regression-diff осмыслен только для одинакового workload'а; "
-            f"сравнение разных наборов запросов даст невалидный overlap."
+            "per_query_overlap: query counts differ "
+            f"(baseline={len(baseline_hits)}, candidate={len(candidate_hits)}); "
+            "legacy positional comparison requires equal counts"
         )
-    out = []
-    for b, c in zip(baseline_hits, candidate_hits):
-        sb, sc = set(b), set(c)
-        if not sb and not sc:
-            out.append(1.0)
+
+    output: list[float] = []
+    for baseline_row, candidate_row in zip(baseline_hits, candidate_rows):
+        baseline_set, candidate_set = set(baseline_row), set(candidate_row)
+        if not baseline_set and not candidate_set:
+            output.append(1.0)
             continue
-        union = sb | sc
-        out.append(len(sb & sc) / len(union) if union else 0.0)
-    return out
+        union = baseline_set | candidate_set
+        output.append(len(baseline_set & candidate_set) / len(union))
+    return output
 
 
 @dataclass
 class DiffReport:
-    # сводные дельты метрик
     coverage_delta: float
     gini_delta: float
     hub_capture_top5_delta: float
     dark_matter_delta: float
-    # per-chunk
+    n_chunks_delta: int = 0
     chunk_deltas: dict[str, int] = field(default_factory=dict)
     new_dark_matter: list[str] = field(default_factory=list)
     rescued: list[str] = field(default_factory=list)
-    # per-query
     per_query_overlap: list[float] = field(default_factory=list)
     mean_query_overlap: float = 0.0
-    # worst-affected чанки (по убыванию |delta|)
     worst_losses: list[tuple[str, int]] = field(default_factory=list)
     worst_gains: list[tuple[str, int]] = field(default_factory=list)
+    legacy_positional_alignment: bool = False
+    corpus_changed: bool = False
 
     def __str__(self) -> str:
         lines = [
             "=" * 64,
             "REGRESSION DIFF (baseline -> candidate)",
             "=" * 64,
-            f"  Coverage delta:     {self.coverage_delta*100:+.2f}%   (отрицательно = хуже)",
-            f"  Dark matter delta:  {self.dark_matter_delta*100:+.2f}%   (положительно = больше тёмной материи)",
-            f"  Gini delta:         {self.gini_delta:+.3f}   (рост = больше концентрация)",
-            f"  Hub-capture top5:   {self.hub_capture_top5_delta*100:+.2f}%",
+            f"  Coverage delta:     {self.coverage_delta * 100:+.2f}%",
+            f"  Dark matter delta:  {self.dark_matter_delta * 100:+.2f}%",
+            f"  Gini delta:         {self.gini_delta:+.3f}",
+            f"  Hub-capture top5:   {self.hub_capture_top5_delta * 100:+.2f}%",
+            f"  Corpus chunks delta:{self.n_chunks_delta:+d}",
             "-" * 64,
-            f"  Mean per-query overlap: {self.mean_query_overlap:.3f}  (1=выдача та же, 0=полностью иная)",
+            f"  Mean per-query overlap: {self.mean_query_overlap:.3f}",
             f"  Новых dark-matter:  {len(self.new_dark_matter)} чанков",
             f"  Спасённых из dark:  {len(self.rescued)} чанков",
-            "-" * 64,
-            "  Худшие потери (chunk: delta freq):",
         ]
-        for cid, d in self.worst_losses[:10]:
-            lines.append(f"    {cid:30} {d:+d}")
+        if self.legacy_positional_alignment:
+            lines.append("  WARNING: legacy positional query alignment was used")
+        if self.corpus_changed:
+            lines.append("  WARNING: corpora differ; coverage denominators are different")
+        lines.extend(["-" * 64, "  Худшие потери (chunk: delta freq):"])
+        for chunk_id, delta in self.worst_losses[:10]:
+            lines.append(f"    {chunk_id:30} {delta:+d}")
         lines.append("  Наибольшие улучшения (chunk: delta freq):")
-        for cid, d in self.worst_gains[:10]:
-            lines.append(f"    {cid:30} {d:+d}")
+        for chunk_id, delta in self.worst_gains[:10]:
+            lines.append(f"    {chunk_id:30} {delta:+d}")
         lines.append("=" * 64)
         return "\n".join(lines)
 
@@ -117,40 +125,69 @@ class DiffReport:
             "dark_matter_delta": round(self.dark_matter_delta, 4),
             "gini_delta": round(self.gini_delta, 4),
             "hub_capture_top5_delta": round(self.hub_capture_top5_delta, 4),
+            "n_chunks_delta": self.n_chunks_delta,
             "mean_query_overlap": round(self.mean_query_overlap, 4),
             "new_dark_matter": self.new_dark_matter,
             "rescued": self.rescued,
             "worst_losses": self.worst_losses[:20],
             "worst_gains": self.worst_gains[:20],
+            "legacy_positional_alignment": self.legacy_positional_alignment,
+            "corpus_changed": self.corpus_changed,
         }
 
 
-def diff_reports(baseline, candidate) -> DiffReport:
-    """
-    Сравнить два ProbeResult.
-    baseline, candidate: ProbeResult (поля freqs, report, hits_per_query).
-    """
-    b_rep, c_rep = baseline.report, candidate.report
+def _corpus_changed(baseline: ProbeResult, candidate: ProbeResult) -> bool:
+    if baseline.corpus_fingerprint and candidate.corpus_fingerprint:
+        return baseline.corpus_fingerprint != candidate.corpus_fingerprint
+    return list(baseline.freqs) != list(candidate.freqs)
+
+
+def diff_reports(
+    baseline: ProbeResult,
+    candidate: ProbeResult,
+    *,
+    corpus_policy: str = "same",
+) -> DiffReport:
+    """Compare two results, validating workload and corpus compatibility."""
+    if corpus_policy not in {"same", "allow-change"}:
+        raise ValueError("corpus_policy must be 'same' or 'allow-change'")
+    if baseline.report is None or candidate.report is None:
+        raise ValueError("both ProbeResult objects must contain a report")
+
+    corpus_changed = _corpus_changed(baseline, candidate)
+    if corpus_changed and corpus_policy == "same":
+        raise ValueError(
+            "corpus fingerprints differ; use corpus_policy='allow-change' for a chunking migration"
+        )
+
+    overlaps = per_query_overlap(
+        baseline.hits_per_query,
+        candidate.hits_per_query,
+        baseline.query_ids,
+        candidate.query_ids,
+    )
     deltas = per_chunk_delta(baseline.freqs, candidate.freqs)
-    new_dm = newly_dark_matter(baseline.freqs, candidate.freqs)
-    rescued = rescued_from_dark_matter(baseline.freqs, candidate.freqs)
-    overlaps = per_query_overlap(baseline.hits_per_query, candidate.hits_per_query)
-    mean_overlap = sum(overlaps) / len(overlaps) if overlaps else 0.0
-
-    # worst losses/gains по |delta|, исключая 0
-    losses = sorted([(k, v) for k, v in deltas.items() if v < 0], key=lambda kv: kv[1])
-    gains = sorted([(k, v) for k, v in deltas.items() if v > 0], key=lambda kv: -kv[1])
-
+    losses = sorted(
+        ((key, value) for key, value in deltas.items() if value < 0),
+        key=lambda item: item[1],
+    )
+    gains = sorted(
+        ((key, value) for key, value in deltas.items() if value > 0),
+        key=lambda item: -item[1],
+    )
     return DiffReport(
-        coverage_delta=c_rep.coverage_pct - b_rep.coverage_pct,
-        gini_delta=c_rep.gini - b_rep.gini,
-        hub_capture_top5_delta=c_rep.hub_capture_top5 - b_rep.hub_capture_top5,
-        dark_matter_delta=c_rep.dark_matter_pct - b_rep.dark_matter_pct,
+        coverage_delta=candidate.report.coverage_pct - baseline.report.coverage_pct,
+        gini_delta=candidate.report.gini - baseline.report.gini,
+        hub_capture_top5_delta=(candidate.report.hub_capture_top5 - baseline.report.hub_capture_top5),
+        dark_matter_delta=(candidate.report.dark_matter_pct - baseline.report.dark_matter_pct),
+        n_chunks_delta=candidate.report.n_chunks - baseline.report.n_chunks,
         chunk_deltas=deltas,
-        new_dark_matter=new_dm,
-        rescued=rescued,
+        new_dark_matter=newly_dark_matter(baseline.freqs, candidate.freqs),
+        rescued=rescued_from_dark_matter(baseline.freqs, candidate.freqs),
         per_query_overlap=overlaps,
-        mean_query_overlap=mean_overlap,
+        mean_query_overlap=sum(overlaps) / len(overlaps) if overlaps else 0.0,
         worst_losses=losses,
         worst_gains=gains,
+        legacy_positional_alignment=not bool(baseline.query_ids),
+        corpus_changed=corpus_changed,
     )

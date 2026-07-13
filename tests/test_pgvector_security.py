@@ -1,12 +1,15 @@
 """test_pgvector_security.py — SQL identifier validation (#3), no instance needed."""
+
 from __future__ import annotations
 
 # psycopg может быть не установлен — валидация идентификаторов должна работать
 # до импорта psycopg (конструктор поднимает ImportError только если psycopg есть).
 # Поэтому тестируем валидаторы напрямую.
 
+
 def _import_validators():
     from retrieval_fairness.adapters import pgvector as pgv
+
     return pgv._validate_ident, pgv._ALLOWED_DISTANCE_OPS, pgv._IDENT_RE
 
 
@@ -21,11 +24,11 @@ def test_validate_ident_rejects_injection():
     bad = [
         "docs; DROP TABLE x; --",
         "docs--",
-        "1table",            # старт с цифры
-        "col name",          # пробел
-        "col'",              # кавычка
-        "col; DROP",         # точка с запятой
-        "",                  # пусто
+        "1table",  # старт с цифры
+        "col name",  # пробел
+        "col'",  # кавычка
+        "col; DROP",  # точка с запятой
+        "",  # пусто
     ]
     for v in bad:
         try:
@@ -50,6 +53,7 @@ def test_distance_op_whitelist():
 
 if __name__ == "__main__":
     import sys
+
     fns = [(n, f) for n, f in sorted(globals().items()) if n.startswith("test_") and callable(f)]
     p = 0
     for name, fn in fns:

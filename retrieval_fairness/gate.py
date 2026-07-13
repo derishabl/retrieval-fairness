@@ -30,7 +30,7 @@ from retrieval_fairness.diff import diff_reports
 # Все пороги — доли 0..1. Валидация защищает от молчаливого «5 = 500%»
 # (доверие к CI-гейту: out-of-range порог = гейт, который никогда не сработает).
 _PCT_RULES = {"coverage_drop", "dark_matter_rise", "query_overlap"}  # 0..1, показываем в %
-_GINI_RULES = {"gini_rise"}                                          # 0..1, показываем как есть
+_GINI_RULES = {"gini_rise"}  # 0..1, показываем как есть
 
 
 def _validate_threshold(name: str, value: float | None, lo: float = 0.0, hi: float = 1.0) -> None:
@@ -47,7 +47,7 @@ def _validate_threshold(name: str, value: float | None, lo: float = 0.0, hi: flo
 def _fmt(name: str, value: float) -> str:
     """Отформатировать значение с единицами по типу правила."""
     if name in _PCT_RULES:
-        return f"{value*100:.2f}%"
+        return f"{value * 100:.2f}%"
     if name in _GINI_RULES:
         return f"{value:+.4f}"
     return f"{value:.4f}"
@@ -86,10 +86,12 @@ class GateResult:
 def evaluate_gate(
     baseline_path: str,
     candidate_path: str,
-    max_coverage_drop: float | None = None,    # доли (0..1); None = правило выключено
+    max_coverage_drop: float | None = None,  # доли (0..1); None = правило выключено
     max_dark_matter_rise: float | None = None,
     max_gini_rise: float | None = None,
     min_query_overlap: float | None = None,
+    corpus_policy: str = "same",
+    allow_legacy_alignment: bool = False,
 ) -> GateResult:
     """
     Оценить правила гейта. Правило активно, если порог задан (не None);
@@ -102,9 +104,15 @@ def evaluate_gate(
     _validate_threshold("max_gini_rise", max_gini_rise)
     _validate_threshold("min_query_overlap", min_query_overlap)
 
-    base = load_probe(baseline_path)
-    cand = load_probe(candidate_path)
-    d = diff_reports(base, cand)
+    base = load_probe(baseline_path, strict_integrity=True)
+    cand = load_probe(candidate_path, strict_integrity=True)
+    if min_query_overlap is not None and (not base.query_ids or not cand.query_ids):
+        if not allow_legacy_alignment:
+            raise ValueError(
+                "overlap gate requires query IDs; pass --allow-legacy-alignment "
+                "to opt into unsafe positional alignment"
+            )
+    d = diff_reports(base, cand, corpus_policy=corpus_policy)
 
     rules: list[GateRule] = []
 
@@ -145,6 +153,10 @@ def run_gate_cli(args) -> int:
             max_dark_matter_rise=args.max_dark_matter_rise,
             max_gini_rise=args.max_gini_rise,
             min_query_overlap=args.min_query_overlap,
+            corpus_policy=getattr(args, "corpus_policy", "same"),
+            allow_legacy_alignment=(
+                getattr(args, "allow_legacy_alignment", False) or not getattr(args, "strict", False)
+            ),
         )
     except ValueError as e:
         print(f"ОШИБКА: {e}", file=sys.stderr)

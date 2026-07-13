@@ -6,8 +6,13 @@ test_metrics.py — юнит-тесты метрик exposure.
 
 from __future__ import annotations
 from retrieval_fairness.metrics import (
-    coverage, dark_matter, gini, hub_capture, lorenz,
-    retrieval_frequencies, build_report,
+    coverage,
+    dark_matter,
+    gini,
+    hub_capture,
+    lorenz,
+    retrieval_frequencies,
+    build_report,
 )
 
 
@@ -92,6 +97,7 @@ def test_build_report_fields():
 if __name__ == "__main__":
     # простой runner без pytest
     import sys
+
     fns = [(n, f) for n, f in sorted(globals().items()) if n.startswith("test_") and callable(f)]
     passed = 0
     for name, fn in fns:
@@ -107,6 +113,7 @@ if __name__ == "__main__":
 
 def test_reachability_ceiling_bounds():
     from retrieval_fairness.metrics import reachability_ceiling
+
     # нельзя найти больше уникальных чанков, чем n_queries*top_k, и не больше корпуса
     assert reachability_ceiling(260000, 3452, 10) == 34520
     # если корпус меньше потолка — потолок ограничен корпусом
@@ -119,6 +126,7 @@ def test_reachability_ceiling_bounds():
 def test_coverage_of_ceiling_vs_coverage():
     """На 260k-подобной ситуации coverage ~11.7% = ~88% от workload-потолка."""
     from retrieval_fairness.metrics import build_report
+
     # 100 чанков, 5 запросов, top-4 -> потолок 20; найдено 10 -> coverage 10%, of ceiling 50%
     freqs = {f"c{i}": (1 if i < 10 else 0) for i in range(100)}
     rep = build_report(freqs, n_queries=5, top_k=4)

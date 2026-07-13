@@ -21,6 +21,7 @@ import json
 from retrieval_fairness.probe import ProbeResult
 from retrieval_fairness.metrics import lorenz, hub_leaderboard
 from retrieval_fairness.serialize import load_probe
+from retrieval_fairness.validation import require_positive_int, validate_vector
 
 
 def _svg_lorenz(points: list[tuple[float, float]], width: int = 400, height: int = 400) -> str:
@@ -39,11 +40,11 @@ def _svg_lorenz(points: list[tuple[float, float]], width: int = 400, height: int
         curve = "M " + " L ".join(pts)
     return f"""<svg width="{width}" height="{height}" viewBox="0 0 {width} {height}">
   <rect x="{pad}" y="{pad}" width="{w}" height="{h}" fill="#fafafa" stroke="#ddd"/>
-  <line x1="{pad}" y1="{height-pad}" x2="{pad+w}" y2="{pad}" stroke="#ccc" stroke-dasharray="4 3"/>
+  <line x1="{pad}" y1="{height - pad}" x2="{pad + w}" y2="{pad}" stroke="#ccc" stroke-dasharray="4 3"/>
   <path d="{curve}" fill="none" stroke="#d62728" stroke-width="2"/>
-  <text x="{pad}" y="{height-8}" font-size="11" fill="#666">доля чанков (бедные → богатые)</text>
-  <text x="6" y="{pad+10}" font-size="11" fill="#666" transform="rotate(-90 12 {pad+30})">доля exposure</text>
-  <text x="{width//2-30}" y="18" font-size="12" fill="#333">Lorenz curve</text>
+  <text x="{pad}" y="{height - 8}" font-size="11" fill="#666">доля чанков (бедные → богатые)</text>
+  <text x="6" y="{pad + 10}" font-size="11" fill="#666" transform="rotate(-90 12 {pad + 30})">доля exposure</text>
+  <text x="{width // 2 - 30}" y="18" font-size="12" fill="#333">Lorenz curve</text>
 </svg>"""
 
 
@@ -62,6 +63,7 @@ def _svg_histogram(freqs: dict[str, int], bins: int = 20, width: int = 400, heig
         counts[idx] += 1
     # log
     import math
+
     log_counts = [math.log10(c + 1) for c in counts]
     max_lc = max(log_counts) or 1
     pad = 30
@@ -71,46 +73,86 @@ def _svg_histogram(freqs: dict[str, int], bins: int = 20, width: int = 400, heig
         bh = (lc / max_lc) * (height - 2 * pad)
         x = pad + i * bw
         y = (height - pad) - bh
-        bars.append(f'<rect x="{x:.1f}" y="{y:.1f}" width="{bw-1:.1f}" height="{bh:.1f}" fill="#1f77b4"/>')
+        bars.append(f'<rect x="{x:.1f}" y="{y:.1f}" width="{bw - 1:.1f}" height="{bh:.1f}" fill="#1f77b4"/>')
     bars_str = "\n".join(bars)
     return f"""<svg width="{width}" height="{height}" viewBox="0 0 {width} {height}">
-  <line x1="{pad}" y1="{height-pad}" x2="{pad+ bins*bw}" y2="{height-pad}" stroke="#333"/>
-  <line x1="{pad}" y1="{pad}" x2="{pad}" y2="{height-pad}" stroke="#333"/>
+  <line x1="{pad}" y1="{height - pad}" x2="{pad + bins * bw}" y2="{height - pad}" stroke="#333"/>
+  <line x1="{pad}" y1="{pad}" x2="{pad}" y2="{height - pad}" stroke="#333"/>
   {bars_str}
-  <text x="{width//2-50}" y="18" font-size="12" fill="#333">Retrieval frequency histogram (log y)</text>
-  <text x="{pad}" y="{height-8}" font-size="10" fill="#666">0</text>
-  <text x="{pad+ bins*bw - 20}" y="{height-8}" font-size="10" fill="#666">{max_v}</text>
+  <text x="{width // 2 - 50}" y="18" font-size="12" fill="#333">Retrieval frequency histogram (log y)</text>
+  <text x="{pad}" y="{height - 8}" font-size="10" fill="#666">0</text>
+  <text x="{pad + bins * bw - 20}" y="{height - 8}" font-size="10" fill="#666">{max_v}</text>
 </svg>"""
 
 
-def _pca_2d(chunks_vectors: list[list[float]], labels: list[str], freqs: dict[str, int],
-            width: int = 480, height: int = 360) -> str:
-    """2D PCA projection: found (синий) vs dark-matter (красный)."""
+def _pca_2d(
+    chunks_vectors: list[list[float]],
+    labels: list[str],
+    freqs: dict[str, int],
+    width: int = 480,
+    height: int = 360,
+    max_pca_points: int = 5000,
+) -> str:
+    """2D PCA projection with deterministic, dark-matter-first sampling."""
+    import random
+
     import numpy as np
     from sklearn.decomposition import PCA
-    if not chunks_vectors:
-        return "<p>нет векторов для проекции</p>"
-    X = np.array(chunks_vectors, dtype=float)
-    if X.shape[1] < 2:
-        return "<p>размерность < 2, проекция невозможна</p>"
-    proj = PCA(n_components=2).fit_transform(X)
-    # нормализуем
-    xs = (proj[:, 0] - proj[:, 0].min()) / (np.ptp(proj[:, 0]) + 1e-9)
-    ys = (proj[:, 1] - proj[:, 1].min()) / (np.ptp(proj[:, 1]) + 1e-9)
+
+    require_positive_int(max_pca_points, "max_pca_points")
+    if len(chunks_vectors) != len(labels):
+        raise ValueError(f"len(chunks_vectors)={len(chunks_vectors)} != len(chunk_ids)={len(labels)}")
+    total = len(chunks_vectors)
+    if total == 0:
+        return "<p>нет векторов для проекции — displayed 0 of 0 chunks</p>"
+    dimension = len(chunks_vectors[0])
+    for index, vector in enumerate(chunks_vectors):
+        validate_vector(vector, name=f"chunks_vectors[{index}]", dim=dimension)
+    if total < 2:
+        return f"<p>для PCA нужно минимум 2 чанка — displayed {total} of {total} chunks</p>"
+    if dimension < 2:
+        return f"<p>размерность &lt; 2, проекция невозможна — displayed {total} of {total} chunks</p>"
+
+    dark_indices = [i for i, label in enumerate(labels) if freqs.get(label, 0) == 0]
+    found_indices = [i for i, label in enumerate(labels) if freqs.get(label, 0) > 0]
+    if total > max_pca_points:
+        if len(dark_indices) >= max_pca_points:
+            selected = dark_indices[:max_pca_points]
+        else:
+            rng = random.Random(0)
+            remaining = max_pca_points - len(dark_indices)
+            selected_found = rng.sample(found_indices, min(remaining, len(found_indices)))
+            selected = dark_indices + sorted(selected_found)
+    else:
+        selected = list(range(total))
+
+    if len(selected) < 2:
+        return (
+            f"<p>для PCA нужно минимум 2 отображаемых чанка — displayed {len(selected)} of {total} chunks</p>"
+        )
+    sampled_vectors = [chunks_vectors[i] for i in selected]
+    sampled_labels = [labels[i] for i in selected]
+    matrix = np.asarray(sampled_vectors, dtype=float)
+    projection = PCA(n_components=2).fit_transform(matrix)
+    xs = (projection[:, 0] - projection[:, 0].min()) / (np.ptp(projection[:, 0]) + 1e-9)
+    ys = (projection[:, 1] - projection[:, 1].min()) / (np.ptp(projection[:, 1]) + 1e-9)
     pad = 20
-    pts = []
-    for i, (lab) in enumerate(labels):
-        cid = lab
-        found = freqs.get(cid, 0) > 0
+    points = []
+    for index, chunk_id in enumerate(sampled_labels):
+        found = freqs.get(chunk_id, 0) > 0
         color = "#1f77b4" if found else "#d62728"
-        cx = pad + xs[i] * (width - 2 * pad)
-        cy = pad + ys[i] * (height - 2 * pad)
-        pts.append(f'<circle cx="{cx:.1f}" cy="{cy:.1f}" r="3" fill="{color}" opacity="0.7"><title>{html.escape(cid)}</title></circle>')
-    pts_str = "\n".join(pts)
-    return f"""<svg width="{width}" height="{height}" viewBox="0 0 {width} {height}">
-  <rect x="{pad}" y="{pad}" width="{width-2*pad}" height="{height-2*pad}" fill="#fafafa" stroke="#ddd"/>
-  {pts_str}
-  <text x="{width//2-60}" y="18" font-size="12" fill="#333">Corpus map (PCA 2D): blue=found, red=dark-matter</text>
+        cx = pad + xs[index] * (width - 2 * pad)
+        cy = pad + ys[index] * (height - 2 * pad)
+        points.append(
+            f'<circle cx="{cx:.1f}" cy="{cy:.1f}" r="3" fill="{color}" '
+            f'opacity="0.7"><title>{html.escape(chunk_id)}</title></circle>'
+        )
+    points_html = "\n".join(points)
+    return f"""<p>displayed {len(selected)} of {total} chunks</p>
+<svg width="{width}" height="{height}" viewBox="0 0 {width} {height}">
+  <rect x="{pad}" y="{pad}" width="{width - 2 * pad}" height="{height - 2 * pad}" fill="#fafafa" stroke="#ddd"/>
+  {points_html}
+  <text x="{width // 2 - 60}" y="18" font-size="12" fill="#333">Corpus map (PCA 2D): blue=found, red=dark-matter</text>
 </svg>"""
 
 
@@ -119,9 +161,11 @@ def build_html(
     chunks_vectors: list[list[float]] | None = None,
     chunk_ids: list[str] | None = None,
     title: str = "Retrieval Fairness Report",
+    max_pca_points: int = 5000,
 ) -> str:
     """Сгенерировать автономный HTML-отчёт."""
-    assert result.report is not None
+    if result.report is None:
+        raise ValueError("ProbeResult.report is required for a dashboard")
     rep = result.report
     freqs = result.freqs
     lz = lorenz(freqs)
@@ -130,19 +174,18 @@ def build_html(
 
     # hub leaderboard таблица
     hubs = hub_leaderboard(freqs, top_n=15)
-    rows = "\n".join(
-        f"<tr><td>{html.escape(cid)}</td><td align='right'>{cnt}</td></tr>"
-        for cid, cnt in hubs
-    )
+    rows = "\n".join(f"<tr><td>{html.escape(cid)}</td><td align='right'>{cnt}</td></tr>" for cid, cnt in hubs)
 
     # dark matter
     dm = rep.dark_matter_ids
-    dm_list = ", ".join(html.escape(c) for c in dm[:50]) + (f" … (+{len(dm)-50})" if len(dm) > 50 else "")
+    dm_list = ", ".join(html.escape(c) for c in dm[:50]) + (f" … (+{len(dm) - 50})" if len(dm) > 50 else "")
 
     # PCA проекция, если даны векторы
     pca_svg = ""
-    if chunks_vectors and chunk_ids:
-        pca_svg = _pca_2d(chunks_vectors, chunk_ids, freqs)
+    if chunks_vectors is not None or chunk_ids is not None:
+        if chunks_vectors is None or chunk_ids is None:
+            raise ValueError("chunks_vectors and chunk_ids must be provided together")
+        pca_svg = _pca_2d(chunks_vectors, chunk_ids, freqs, max_pca_points=max_pca_points)
 
     return f"""<!DOCTYPE html>
 <html lang="ru"><head><meta charset="utf-8"><title>{html.escape(title)}</title>
@@ -162,12 +205,12 @@ def build_html(
 
 <h2>Метрики</h2>
 <div>
-  <div class="metric"><div class="v">{rep.coverage_pct*100:.1f}%</div><div class="l">Coverage (of corpus)</div></div>
-  <div class="metric"><div class="v">{rep.coverage_of_ceiling*100:.1f}%</div><div class="l">Of reachable ceiling ({rep.reachability_ceiling} chunks)</div></div>
-  <div class="metric"><div class="v">{rep.dark_matter_pct*100:.1f}%</div><div class="l">Dark matter</div></div>
+  <div class="metric"><div class="v">{rep.coverage_pct * 100:.1f}%</div><div class="l">Coverage (of corpus)</div></div>
+  <div class="metric"><div class="v">{rep.coverage_of_ceiling * 100:.1f}%</div><div class="l">Of reachable ceiling ({rep.reachability_ceiling} chunks)</div></div>
+  <div class="metric"><div class="v">{rep.dark_matter_pct * 100:.1f}%</div><div class="l">Dark matter</div></div>
   <div class="metric"><div class="v">{rep.gini:.3f}</div><div class="l">Gini (0=равномерно)</div></div>
-  <div class="metric"><div class="v">{rep.hub_capture_top5*100:.1f}%</div><div class="l">Hub capture top5</div></div>
-  <div class="metric"><div class="v">{rep.hub_capture_top10*100:.1f}%</div><div class="l">Hub capture top10</div></div>
+  <div class="metric"><div class="v">{rep.hub_capture_top5 * 100:.1f}%</div><div class="l">Hub capture top5</div></div>
+  <div class="metric"><div class="v">{rep.hub_capture_top10 * 100:.1f}%</div><div class="l">Hub capture top10</div></div>
 </div>
 
 <div class="row">
@@ -175,7 +218,7 @@ def build_html(
   <div>{hist}</div>
 </div>
 
-{f'<h2>Карта корпуса (PCA 2D)</h2><div>{pca_svg}</div>' if pca_svg else ''}
+{f"<h2>Карта корпуса (PCA 2D)</h2><div>{pca_svg}</div>" if pca_svg else ""}
 
 <h2>Top хабы</h2>
 <table><tr><th>chunk id</th><th>попаданий в top-k</th></tr>
@@ -183,23 +226,31 @@ def build_html(
 </table>
 
 <h2>Dark matter ({len(dm)} чанков)</h2>
-<p class="dm">{dm_list or 'нет — все чанки находятся'}</p>
+<p class="dm">{dm_list or "нет — все чанки находятся"}</p>
 
 <hr><p style="color:#999;font-size:11px">retrieval-fairness · автономный отчёт</p>
 </body></html>"""
 
 
-def render_dashboard(result: ProbeResult, out_path: str,
-                     chunks_vectors: list[list[float]] | None = None,
-                     chunk_ids: list[str] | None = None) -> None:
+def render_dashboard(
+    result: ProbeResult,
+    out_path: str,
+    chunks_vectors: list[list[float]] | None = None,
+    chunk_ids: list[str] | None = None,
+    max_pca_points: int = 5000,
+) -> None:
     """Собрать и записать HTML-дашборд в файл."""
-    html_str = build_html(result, chunks_vectors=chunks_vectors, chunk_ids=chunk_ids)
+    html_str = build_html(
+        result,
+        chunks_vectors=chunks_vectors,
+        chunk_ids=chunk_ids,
+        max_pca_points=max_pca_points,
+    )
     with open(out_path, "w", encoding="utf-8") as f:
         f.write(html_str)
 
 
-def render_dashboard_from_baseline(baseline_path: str, out_path: str,
-                                   corpus_path: str | None = None) -> None:
+def render_dashboard_from_baseline(baseline_path: str, out_path: str, corpus_path: str | None = None) -> None:
     """
     Собрать дашборд из сохранённого baseline JSON.
     Если дан corpus_path (JSONL с векторами) — добавит PCA-проекцию.

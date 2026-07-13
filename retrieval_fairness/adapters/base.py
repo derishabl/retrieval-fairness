@@ -9,6 +9,7 @@ from __future__ import annotations
 from typing import Iterator
 
 from retrieval_fairness.types import Chunk, Hit
+from retrieval_fairness.validation import require_positive_int, validate_vector
 
 
 class BaseVectorStoreAdapter:
@@ -19,6 +20,8 @@ class BaseVectorStoreAdapter:
 
     # -- contract: VectorStore-compatible --------------------------------
     def search(self, query_vec: list[float], top_k: int) -> list[Hit]:
+        require_positive_int(top_k, "top_k")
+        validate_vector(query_vec, name="query vector")
         return self._search(query_vec, top_k)
 
     def list_chunks(self) -> Iterator[Chunk]:
