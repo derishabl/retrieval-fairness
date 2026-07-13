@@ -34,3 +34,6 @@ cases/*.json
 
 # Internal planning / session notes (not for public repo)
 internal/
+
+# Private promotional video work and generated media
+remotion-video/
