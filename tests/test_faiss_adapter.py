@@ -4,11 +4,14 @@ from __future__ import annotations
 import tempfile
 import os
 import numpy as np
+import pytest
 
 from retrieval_fairness.types import Chunk, Query
 from retrieval_fairness.adapters.inmemory import InMemoryVectorStore
 from retrieval_fairness.adapters.faiss import FaissAdapter, build_flat_index
 from retrieval_fairness.probe import probe
+
+pytest.importorskip("faiss", reason="FAISS adapter extra is not installed")
 
 
 def _toy():
