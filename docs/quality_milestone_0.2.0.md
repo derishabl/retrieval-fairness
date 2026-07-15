@@ -31,8 +31,8 @@ Verified on 2026-07-16 against the post-release 0.1.1 audit.
 The CodeQL workflow becomes visible in GitHub Security after this branch is
 merged and its first analysis completes.
 
-## Owner action still required
+## License holder confirmation
 
-The repository currently names `derishabl` as the MIT copyright holder. Legal
-holder confirmation cannot be inferred by automation and remains an explicit
-owner decision before release.
+On 2026-07-16, the repository owner explicitly confirmed `derishabl` as the
+MIT copyright holder recorded in `LICENSE`. The legal-holder audit item is
+closed.
