@@ -1,9 +1,10 @@
 """test_adapters.py — adapter registry and base infrastructure."""
 
 from __future__ import annotations
-from retrieval_fairness.types import Chunk
-from retrieval_fairness.adapters import get_adapter, InMemoryVectorStore, BaseVectorStoreAdapter
+
+from retrieval_fairness.adapters import BaseVectorStoreAdapter, InMemoryVectorStore, get_adapter
 from retrieval_fairness.adapters.base import BaseVectorStoreAdapter as Base
+from retrieval_fairness.types import Chunk
 
 
 def test_get_adapter_inmemory():

@@ -13,17 +13,18 @@ probe -> baseline JSON + dashboard. Один entrypoint для smoke и полн
 """
 
 from __future__ import annotations
+
 import argparse
 import json
 import os
 
 import numpy as np
 
-from retrieval_fairness.types import Chunk, Query
-from retrieval_fairness.adapters.faiss import build_flat_index, FaissAdapter
+from retrieval_fairness.adapters.faiss import FaissAdapter, build_flat_index
+from retrieval_fairness.embedders import get_embedder
 from retrieval_fairness.probe import probe
 from retrieval_fairness.serialize import save_probe
-from retrieval_fairness.embedders import get_embedder
+from retrieval_fairness.types import Chunk, Query
 
 
 def load_corpus(path: str) -> list[Chunk]:
@@ -90,11 +91,24 @@ def run_case(
     norms = np.linalg.norm(chunk_arr, axis=1, keepdims=True)
     norms = np.where(norms < 1e-12, 1e-12, norms)
     chunk_arr = chunk_arr / norms
-    build_flat_index(chunk_arr.tolist(), ids, idx_path, ids_map, metric="ip")
+    build_flat_index(
+        chunk_arr.tolist(),
+        ids,
+        idx_path,
+        ids_map,
+        metric="ip",
+        normalized=True,
+    )
 
     # 3. probe
     store = FaissAdapter(idx_path, ids_map)
-    result = probe(store, queries_vec, top_k=top_k, corpus_ids=ids)
+    result = probe(
+        store,
+        queries_vec,
+        top_k=top_k,
+        corpus_texts={chunk.id: chunk.text for chunk in corpus},
+        embedder=embedder_name,
+    )
     print(result.report)
 
     # 4. save

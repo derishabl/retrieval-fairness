@@ -1,7 +1,9 @@
 """test_pgvector_adapter.py — pgvector adapter tests (skip without DATABASE_URL)."""
 
 from __future__ import annotations
+
 import os
+
 import pytest
 
 PGV_URL = os.environ.get("PGVECTOR_TEST_URL")  # e.g. postgres://user:pass@localhost:5432/db

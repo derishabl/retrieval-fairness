@@ -6,12 +6,13 @@ adapters/inmemory.py — in-memory векторный стор (косинус, 
 """
 
 from __future__ import annotations
-from typing import Iterator
+
+from collections.abc import Iterator
 
 import numpy as np
 
-from retrieval_fairness.types import Chunk, Hit
 from retrieval_fairness.adapters.base import BaseVectorStoreAdapter
+from retrieval_fairness.types import Chunk, Hit
 from retrieval_fairness.validation import validate_unique_ids, validate_vector
 
 
@@ -57,15 +58,27 @@ class InMemoryVectorStore(BaseVectorStoreAdapter):
         if sims.size == 0:
             return []
         k = min(top_k, sims.size)
-        idx = np.argpartition(-sims, k - 1)[:k]
-        idx = idx[np.argsort(-sims[idx])]
-        return [Hit(chunk_id=self._ids[i], score=float(sims[i]), rank=r + 1) for r, i in enumerate(idx)]
+        # Public tie policy: score DESC, chunk_id ASC. A full lexicographic
+        # order also makes the top-k boundary deterministic for duplicate and
+        # zero vectors across NumPy versions/processes.
+        idx = sorted(range(sims.size), key=lambda position: (-float(sims[position]), self._ids[position]))[:k]
+        return [Hit(chunk_id=self._ids[i], score=float(sims[i]), rank=rank + 1) for rank, i in enumerate(idx)]
 
     def _list_chunk_ids(self) -> Iterator[str]:
         yield from self._ids
 
     def list_chunks(self) -> Iterator[Chunk]:
         yield from self._chunks
+
+    def provenance_metadata(self) -> dict[str, object]:
+        return {
+            "adapter": "inmemory",
+            "adapter_version": np.__version__,
+            "adapter_config": {"corpus_size": len(self._chunks), "dimension": self._dim},
+            "distance_metric": "cosine",
+            "normalized": True,
+            "search_params": {"tie_policy": "score_desc_chunk_id_asc"},
+        }
 
     @property
     def size(self) -> int:

@@ -23,6 +23,7 @@ baseline это ок (diff сравнивает exposure, не векторы).
 """
 
 from __future__ import annotations
+
 import argparse
 import json
 import os

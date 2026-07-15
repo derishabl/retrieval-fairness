@@ -15,11 +15,12 @@ dashboard.py — HTML-дашборд exposure-смещения.
 """
 
 from __future__ import annotations
+
 import html
 import json
 
+from retrieval_fairness.metrics import hub_leaderboard, lorenz
 from retrieval_fairness.probe import ProbeResult
-from retrieval_fairness.metrics import lorenz, hub_leaderboard
 from retrieval_fairness.serialize import load_probe
 from retrieval_fairness.validation import require_positive_int, validate_vector
 

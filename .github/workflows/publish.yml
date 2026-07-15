@@ -53,7 +53,8 @@ jobs:
           python -m pip install -e '.[dev,faiss]'
           ruff check .
           ruff format --check .
-          pytest -W error --cov=retrieval_fairness --cov-fail-under=75
+          pytest -W error --cov=retrieval_fairness --cov-fail-under=80
+          pyright
           python -m build
           twine check dist/*
       - name: Smoke-install wheel

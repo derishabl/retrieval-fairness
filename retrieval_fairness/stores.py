@@ -7,6 +7,7 @@ InMemoryVectorStore перенесён в retrieval_fairness.adapters.inmemory.
 """
 
 from __future__ import annotations
+
 from retrieval_fairness.adapters.inmemory import InMemoryVectorStore
 
 __all__ = ["InMemoryVectorStore"]

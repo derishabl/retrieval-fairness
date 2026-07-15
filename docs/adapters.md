@@ -28,12 +28,15 @@ store = InMemoryVectorStore(chunks)   # list[Chunk] с vector
 
 ## FAISS
 
-Нужен `.faiss` индекс + JSON sidecar `{"ids": [...]}` (id по порядку
-строк индекса). Построить индекс из векторов:
+Нужен `.faiss` индекс + schema-v2 JSON manifest. Manifest хранит ordered
+IDs, SHA-256 индекса, dimension, metric и normalization и поэтому отклоняет
+sidecar от другого индекса даже при одинаковой длине. Построить пару:
 
 ```python
 from retrieval_fairness.adapters.faiss import build_flat_index
-build_flat_index(vectors, ids, "idx.faiss", "ids.json", metric="ip")
+build_flat_index(
+    vectors, ids, "idx.faiss", "ids.json", metric="ip", normalized=True
+)
 # metric: 'ip' (inner product / cosine на нормализованных) | 'l2'
 ```
 
@@ -66,7 +69,8 @@ store = get_adapter("pgvector", database_url="postgresql://...",
 ```
 
 Оператор дистанции по умолчанию `<=>` (cosine); варианты `<->` (L2),
-`<#>` (inner product) — через `distance_op=` в Python API.
+`<#>` (inner product) — через `distance_op=` в Python API. Logical corpus IDs
+перечисляются с `ORDER BY id`; score ties разрешаются вторичным `id ASC`.
 
 ## Qdrant
 
@@ -118,3 +122,8 @@ class MyAdapter(BaseVectorStoreAdapter):
 - **Score-шкалы** разных БД отличаются (cosine dist / L2 / IP) —
   метрики exposure работают по **рангам/top-k id**, не по score, поэтому
   сопоставимы между сторами.
+- Публичная tie policy: score/distance, затем `chunk_id ASC`. InMemory и SQL
+  детерминированы включая границу top-k. FAISS/Qdrant стабилизируют порядок
+  возвращённых ties, но backend может сам выбрать boundary ties; версия backend
+  и это ограничение записываются в provenance.
+- URL БД, Qdrant endpoint и API key не попадают в baseline metadata.

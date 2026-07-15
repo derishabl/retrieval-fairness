@@ -20,12 +20,12 @@ gate.py — CI-гейт для retrieval-fairness.
 """
 
 from __future__ import annotations
-from dataclasses import dataclass, field
+
 import sys
+from dataclasses import dataclass, field
 
-from retrieval_fairness.serialize import load_probe
 from retrieval_fairness.diff import diff_reports
-
+from retrieval_fairness.serialize import load_probe
 
 # Все пороги — доли 0..1. Валидация защищает от молчаливого «5 = 500%»
 # (доверие к CI-гейту: out-of-range порог = гейт, который никогда не сработает).
@@ -90,7 +90,8 @@ def evaluate_gate(
     max_dark_matter_rise: float | None = None,
     max_gini_rise: float | None = None,
     min_query_overlap: float | None = None,
-    corpus_policy: str = "same",
+    corpus_policy: str = "same-content",
+    workload_policy: str = "same-content",
     allow_legacy_alignment: bool = False,
 ) -> GateResult:
     """
@@ -106,13 +107,21 @@ def evaluate_gate(
 
     base = load_probe(baseline_path, strict_integrity=True)
     cand = load_probe(candidate_path, strict_integrity=True)
-    if min_query_overlap is not None and (not base.query_ids or not cand.query_ids):
-        if not allow_legacy_alignment:
-            raise ValueError(
-                "overlap gate requires query IDs; pass --allow-legacy-alignment "
-                "to opt into unsafe positional alignment"
-            )
-    d = diff_reports(base, cand, corpus_policy=corpus_policy)
+    if (
+        min_query_overlap is not None
+        and (not base.query_ids or not cand.query_ids)
+        and not allow_legacy_alignment
+    ):
+        raise ValueError(
+            "overlap gate requires query IDs; pass --allow-legacy-alignment "
+            "to opt into unsafe positional alignment"
+        )
+    d = diff_reports(
+        base,
+        cand,
+        corpus_policy=corpus_policy,
+        workload_policy=workload_policy,
+    )
 
     rules: list[GateRule] = []
 
@@ -153,7 +162,8 @@ def run_gate_cli(args) -> int:
             max_dark_matter_rise=args.max_dark_matter_rise,
             max_gini_rise=args.max_gini_rise,
             min_query_overlap=args.min_query_overlap,
-            corpus_policy=getattr(args, "corpus_policy", "same"),
+            corpus_policy=getattr(args, "corpus_policy", "same-content"),
+            workload_policy=getattr(args, "workload_policy", "same-content"),
             allow_legacy_alignment=(
                 getattr(args, "allow_legacy_alignment", False) or not getattr(args, "strict", False)
             ),

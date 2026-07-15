@@ -11,6 +11,7 @@ test_qdrant_mock.py — мок-тесты QdrantAdapter без сервера и
 """
 
 from __future__ import annotations
+
 import sys
 import types
 
@@ -83,6 +84,18 @@ def test_search_named_vector_uses_using(monkeypatch):
     call = recorded["call"]
     assert call["query"] == [0.3]  # вектор НЕ заворачивается в dict
     assert call["using"] == "image"  # named vector -> using=
+
+
+def test_provenance_excludes_endpoint_and_api_key(monkeypatch):
+    recorded: dict = {}
+    _install_fake_qdrant(monkeypatch, recorded)
+    from retrieval_fairness.adapters.qdrant import QdrantAdapter
+
+    adapter = QdrantAdapter(url="https://secret-host.example", collection="col", api_key="top-secret")
+    metadata = str(adapter.provenance_metadata())
+    assert "top-secret" not in metadata
+    assert "secret-host" not in metadata
+    assert "col" in metadata
 
 
 def test_client_is_reused_across_searches(monkeypatch):

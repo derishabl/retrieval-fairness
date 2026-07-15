@@ -11,44 +11,46 @@ JMLR 2010) и README «Why your index has dark matter».
 (coverage, Gini, dark-matter, hub-capture) + CLI probe.
 """
 
-__version__ = "0.1.1"
+__version__ = "0.2.0"
 
-from retrieval_fairness.types import Chunk, Hit, Query, VectorStore
 from retrieval_fairness.adapters import InMemoryVectorStore
+from retrieval_fairness.diff import DiffReport, diff_reports
 from retrieval_fairness.metrics import (
+    FairnessReport,
     coverage,
-    gini,
-    reachability_ceiling,
     dark_matter,
+    gini,
     hub_capture,
     lorenz,
-    FairnessReport,
+    reachability_ceiling,
 )
-from retrieval_fairness.probe import probe, ProbeResult
-from retrieval_fairness.diff import diff_reports, DiffReport
-from retrieval_fairness.serialize import save_probe, load_probe
-from retrieval_fairness.qrels import validate_qrels, QrelsValidation
+from retrieval_fairness.probe import ProbeResult, probe
+from retrieval_fairness.provenance import ProbeMetadata
+from retrieval_fairness.qrels import QrelsValidation, validate_qrels
+from retrieval_fairness.serialize import load_probe, save_probe
+from retrieval_fairness.types import Chunk, Hit, Query, VectorStore
 
 __all__ = [
-    "__version__",
     "Chunk",
+    "DiffReport",
+    "FairnessReport",
     "Hit",
+    "InMemoryVectorStore",
+    "ProbeMetadata",
+    "ProbeResult",
+    "QrelsValidation",
     "Query",
     "VectorStore",
-    "InMemoryVectorStore",
+    "__version__",
     "coverage",
-    "gini",
-    "reachability_ceiling",
     "dark_matter",
-    "hub_capture",
-    "lorenz",
-    "FairnessReport",
-    "probe",
-    "ProbeResult",
     "diff_reports",
-    "DiffReport",
-    "save_probe",
+    "gini",
+    "hub_capture",
     "load_probe",
+    "lorenz",
+    "probe",
+    "reachability_ceiling",
+    "save_probe",
     "validate_qrels",
-    "QrelsValidation",
 ]

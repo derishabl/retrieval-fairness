@@ -10,8 +10,10 @@ sentence-transformers, ...) к общему интерфейсу, чтобы pro
 """
 
 from __future__ import annotations
-from typing import Protocol, runtime_checkable
+
 import warnings
+from typing import Protocol, runtime_checkable
+
 import numpy as np
 
 
@@ -19,7 +21,7 @@ import numpy as np
 class Embedder(Protocol):
     """Контракт эмбеддера: fit на корпусе, encode произвольных текстов."""
 
-    def fit(self, texts: list[str]) -> "Embedder": ...
+    def fit(self, texts: list[str]) -> Embedder: ...
     def encode(self, texts: list[str]) -> np.ndarray: ...
     @property
     def dim(self) -> int: ...
@@ -45,7 +47,7 @@ class TfidfEmbedder:
         self._fitted = False
         self._dim_val = 0
 
-    def fit(self, texts: list[str]) -> "TfidfEmbedder":
+    def fit(self, texts: list[str]) -> TfidfEmbedder:
         self._vec.fit(texts)
         self._fitted = True
         self._dim_val = len(self._vec.vocabulary_)
@@ -87,7 +89,7 @@ class SentenceTransformerEmbedder:
         self._model = SentenceTransformer(model_name)
         self._dim_val = self._model.get_sentence_embedding_dimension()
 
-    def fit(self, texts: list[str]) -> "SentenceTransformerEmbedder":
+    def fit(self, texts: list[str]) -> SentenceTransformerEmbedder:
         # dense-эмбеддеры не требуют fit на корпусе; no-op
         return self
 
@@ -115,7 +117,7 @@ class FastembedEmbedder:
         # dim узнаётся лениво при первом encode
         self._dim_val: int | None = None
 
-    def fit(self, texts: list[str]) -> "FastembedEmbedder":
+    def fit(self, texts: list[str]) -> FastembedEmbedder:
         return self  # no-op для dense
 
     def encode(self, texts: list[str]) -> np.ndarray:

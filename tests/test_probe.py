@@ -6,9 +6,10 @@ test_probe.py — тест прогона probe на in-memory сторе.
 """
 
 from __future__ import annotations
-from retrieval_fairness.types import Chunk, Query
-from retrieval_fairness.stores import InMemoryVectorStore
+
 from retrieval_fairness.probe import probe
+from retrieval_fairness.stores import InMemoryVectorStore
+from retrieval_fairness.types import Chunk, Query
 
 
 def _toy_corpus() -> list[Chunk]:

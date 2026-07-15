@@ -1,11 +1,13 @@
 """test_embedders.py — Embedder contract + TfidfEmbedder."""
 
 from __future__ import annotations
-import os
-import pytest
-import numpy as np
 
-from retrieval_fairness.embedders import TfidfEmbedder, get_embedder, Embedder
+import os
+
+import numpy as np
+import pytest
+
+from retrieval_fairness.embedders import Embedder, TfidfEmbedder, get_embedder
 
 
 def test_tfidf_fit_encode():

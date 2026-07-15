@@ -1,16 +1,7 @@
-"""
-metrics.py — метрики exposure-смещения векторного поиска.
-
-Ядро честно заимствовано из IR-fairness / экономики:
-  - Gini, Lorenz — классика измерения концентрации
-  - retrievability — из T-Retrievability (ACM DOI 10.1145/3746252.3760820)
-Product-упаковка (coverage %, dark-matter %, hub-capture ratio) — наша.
-
-Все метрики считаются по retrieval-frequency: сколько раз каждый чанк
-попал в top-k по запросам workload'а. Источник частот — probe.probe().
-"""
+"""Exposure concentration and reachability metrics for retrieval workloads."""
 
 from __future__ import annotations
+
 from dataclasses import dataclass, field
 
 from retrieval_fairness.validation import (
@@ -20,143 +11,152 @@ from retrieval_fairness.validation import (
 )
 
 
-def _validate_freqs(freqs: dict[str, int]) -> None:
-    validate_unique_ids(list(freqs), name="frequency IDs")
-    for chunk_id, value in freqs.items():
-        require_non_negative_int(value, f"frequency[{chunk_id!r}]")
+@dataclass(frozen=True)
+class FrequencyStats:
+    """Immutable calculation context shared by compound report metrics."""
+
+    items: tuple[tuple[str, int], ...]
+    values: tuple[int, ...]
+    sorted_values: tuple[int, ...]
+    total: int
+    found: int
+
+    @classmethod
+    def from_frequencies(cls, freqs: dict[str, int]) -> FrequencyStats:
+        validate_unique_ids(list(freqs), name="frequency IDs")
+        items = tuple(freqs.items())
+        for chunk_id, value in items:
+            require_non_negative_int(value, f"frequency[{chunk_id!r}]")
+        values = tuple(value for _, value in items)
+        return cls(
+            items=items,
+            values=values,
+            sorted_values=tuple(sorted(values)),
+            total=sum(values),
+            found=sum(value > 0 for value in values),
+        )
+
+    @property
+    def n(self) -> int:
+        return len(self.values)
+
+
+def _stats(freqs: dict[str, int]) -> FrequencyStats:
+    return FrequencyStats.from_frequencies(freqs)
 
 
 def retrieval_frequencies(hits_per_query: list[list[str]], corpus_ids: list[str]) -> dict[str, int]:
-    """
-    Сколько раз каждый чанк корпуса попал в top-k по всем запросам.
-
-    hits_per_query: список top-k (id чанков) на каждый запрос.
-    corpus_ids: все id корпуса (включая ни разу не найденные).
-    """
+    """Count how often each corpus ID occurs in the workload's top-k rows."""
     validate_unique_ids(corpus_ids, name="corpus_ids")
-    freqs = {cid: 0 for cid in corpus_ids}
+    freqs = dict.fromkeys(corpus_ids, 0)
     for query_index, hits in enumerate(hits_per_query):
         validate_unique_ids(hits, name=f"hits_per_query[{query_index}]")
-        for cid in hits:
-            if cid not in freqs:
-                raise ValueError(f"hit ID {cid!r} is not present in corpus_ids")
-            freqs[cid] += 1
+        for chunk_id in hits:
+            if chunk_id not in freqs:
+                raise ValueError(f"hit ID {chunk_id!r} is not present in corpus_ids")
+            freqs[chunk_id] += 1
     return freqs
 
 
+def _coverage(stats: FrequencyStats) -> float:
+    return stats.found / stats.n if stats.n else 0.0
+
+
 def coverage(freqs: dict[str, int]) -> float:
-    """
-    Coverage % — доля корпуса, найденная хотя бы раз.
-    1.0 = все чанки находятся; 0.5 = половина ни разу не нашлась.
-    """
-    _validate_freqs(freqs)
-    if not freqs:
-        return 0.0
-    found = sum(1 for v in freqs.values() if v > 0)
-    return found / len(freqs)
+    """Share of corpus chunks retrieved at least once."""
+    return _coverage(_stats(freqs))
 
 
 def dark_matter(freqs: dict[str, int]) -> float:
-    """
-    Dark-matter % — доля корпуса, НИ РАЗУ не найденная ни одним запросом.
-    Дополнение coverage до 1: dark_matter = 1 - coverage.
-    Для пустого корпуса — 0 (нечего быть «тёмным»).
-    """
-    if not freqs:
+    """Share of corpus chunks never retrieved by the workload."""
+    stats = _stats(freqs)
+    return 1.0 - _coverage(stats) if stats.n else 0.0
+
+
+def _gini(stats: FrequencyStats) -> float:
+    if stats.n == 0 or stats.total == 0:
         return 0.0
-    return 1.0 - coverage(freqs)
+    weighted = sum(index * value for index, value in enumerate(stats.sorted_values, start=1))
+    result = (2 * weighted) / (stats.n * stats.total) - (stats.n + 1) / stats.n
+    return max(0.0, min(1.0, result))
 
 
 def gini(freqs: dict[str, int]) -> float:
-    """
-    Gini коэффициент концентрации exposure.
-    0 = равномерно (все чанки находятся одинаково часто);
-    1 = максимально неравномерно (всё в одном чанке).
-
-    Формула: G = (Σ_i Σ_j |x_i - x_j|) / (2 * n * Σ x_i).
-    Заимствовано из экономики / IR-fairness.
-    """
-    _validate_freqs(freqs)
-    vals = list(freqs.values())
-    n = len(vals)
-    if n == 0:
-        return 0.0
-    total = sum(vals)
-    if total == 0:
-        return 0.0  # ничего не находится — концентрация не определена, считаем 0
-    # стабильная формула через отсортированные значения
-    vals_sorted = sorted(vals)
-    cum = 0.0
-    for i, v in enumerate(vals_sorted, start=1):
-        cum += i * v
-    g = (2 * cum) / (n * total) - (n + 1) / n
-    return max(0.0, min(1.0, g))
+    """Gini coefficient of exposure frequencies (0 uniform, 1 concentrated)."""
+    return _gini(_stats(freqs))
 
 
-def lorenz(freqs: dict[str, int]) -> list[tuple[float, float]]:
-    """
-    Lorenz curve: точки (доля чанков, доля накопленного exposure),
-    от беднейших к богатейшим. (0,0) ... (1,1).
-    Диагональ = равенство; провисание = неравенство.
-    """
-    _validate_freqs(freqs)
-    vals = sorted(freqs.values())
-    n = len(vals)
-    if n == 0:
+def _lorenz(stats: FrequencyStats) -> list[tuple[float, float]]:
+    if stats.n == 0:
         return []
-    total = sum(vals)
-    if total == 0:
-        return [(i / n, 0.0) for i in range(n + 1)]
+    if stats.total == 0:
+        return [(index / stats.n, 0.0) for index in range(stats.n + 1)]
     points = [(0.0, 0.0)]
-    cum = 0
-    for i, v in enumerate(vals, start=1):
-        cum += v
-        points.append((i / n, cum / total))
+    cumulative = 0
+    for index, value in enumerate(stats.sorted_values, start=1):
+        cumulative += value
+        points.append((index / stats.n, cumulative / stats.total))
     return points
 
 
-def hub_capture(freqs: dict[str, int], top_n: int = 5) -> float:
-    """
-    Hub-capture ratio — доля всего exposure, приходящаяся на top-N хабов.
-    1.0 = всё попадает в N чанков; ~0 = хабов нет.
-    """
-    require_positive_int(top_n, "top_n")
-    _validate_freqs(freqs)
-    vals = sorted(freqs.values(), reverse=True)
-    total = sum(vals)
-    if total == 0:
+def lorenz(freqs: dict[str, int]) -> list[tuple[float, float]]:
+    """Lorenz curve from (0, 0) to (1, 1), ordered by exposure."""
+    return _lorenz(_stats(freqs))
+
+
+def downsample_lorenz(freqs: dict[str, int], max_points: int = 512) -> list[tuple[float, float]]:
+    """Return deterministic quantile points without materializing a full curve."""
+    require_positive_int(max_points, "max_points")
+    if max_points < 2:
+        raise ValueError("max_points must be at least 2")
+    stats = _stats(freqs)
+    total_points = stats.n + 1 if stats.n else 0
+    if total_points <= max_points:
+        return _lorenz(stats)
+    indices = sorted({round(position * stats.n / (max_points - 1)) for position in range(max_points)})
+    wanted = set(indices)
+    points: list[tuple[float, float]] = []
+    cumulative = 0
+    if 0 in wanted:
+        points.append((0.0, 0.0))
+    for index, value in enumerate(stats.sorted_values, start=1):
+        cumulative += value
+        if index in wanted:
+            y = cumulative / stats.total if stats.total else 0.0
+            points.append((index / stats.n, y))
+    return points
+
+
+def _hub_capture(stats: FrequencyStats, top_n: int) -> float:
+    if stats.total == 0:
         return 0.0
-    return sum(vals[:top_n]) / total
+    return sum(stats.sorted_values[-top_n:]) / stats.total
+
+
+def hub_capture(freqs: dict[str, int], top_n: int = 5) -> float:
+    """Share of total exposure captured by the top-N chunks."""
+    require_positive_int(top_n, "top_n")
+    return _hub_capture(_stats(freqs), top_n)
 
 
 def hub_leaderboard(freqs: dict[str, int], top_n: int = 10) -> list[tuple[str, int]]:
-    """Top-N хабов по частоте попадания в top-k."""
+    """Top-N chunks with a deterministic ID tie-break."""
     require_non_negative_int(top_n, "top_n")
-    _validate_freqs(freqs)
-    return sorted(freqs.items(), key=lambda kv: kv[1], reverse=True)[:top_n]
+    stats = _stats(freqs)
+    return sorted(stats.items, key=lambda item: (-item[1], item[0]))[:top_n]
 
 
 def reachability_ceiling(n_chunks: int, n_queries: int, top_k: int) -> int:
-    """
-    Workload-потолок coverage: сколько уникальных чанков В ПРИНЦИПЕ
-    может быть найдено данным workload'ом. Без него нельзя трактовать
-    coverage на больших корпусах: 3452 запроса × top-10 = 34520
-    максимально достижимых чанков, поэтому coverage 11.7% на 260k-корпусе —
-    это 88% от достижимого, а не «ретривер плохой».
-
-    Потолок = min(n_chunks, n_queries * top_k): нельзя найти больше
-    уникальных чанков, чем n_queries*top_k (по top-k на каждый запрос),
-    и не больше, чем есть в корпусе.
-    Novelty-в-packaging: формулировка coverage как «% от workload-потолка»
-    в продукте не встречается (ни у retobs, ни у EmbedAudit, ни у
-    T-Retrievability как продукта); см. docs/case_study_nq.md (полный NQ).
-    """
+    """Maximum distinct chunks reachable by ``n_queries`` top-k result rows."""
+    require_non_negative_int(n_chunks, "n_chunks")
+    require_non_negative_int(n_queries, "n_queries")
+    require_positive_int(top_k, "top_k")
     return min(n_chunks, n_queries * top_k)
 
 
 @dataclass
 class FairnessReport:
-    """Сводный отчёт по метрикам exposure."""
+    """Derived exposure report. Raw observations remain the source of truth."""
 
     n_chunks: int
     n_queries: int
@@ -169,58 +169,65 @@ class FairnessReport:
     hub_leaderboard: list[tuple[str, int]] = field(default_factory=list)
     lorenz_curve: list[tuple[float, float]] = field(default_factory=list)
     dark_matter_ids: list[str] = field(default_factory=list)
+    found_count: int | None = None
+    dark_matter_count_exact: int | None = None
 
     @property
     def reachability_ceiling(self) -> int:
-        """Workload-потолок: сколько уникальных чанков В ПРИНЦИПЕ достижимо."""
         return reachability_ceiling(self.n_chunks, self.n_queries, self.top_k)
 
     @property
+    def dark_matter_count(self) -> int:
+        if self.dark_matter_count_exact is not None:
+            return self.dark_matter_count_exact
+        return len(self.dark_matter_ids)
+
+    @property
     def coverage_of_ceiling(self) -> float:
-        """
-        Coverage как доля ОТ ДОСТИЖИМОГО ПОТОЛКА, а не от всего корпуса.
-        1.0 = ретривер исчерпал всё, что workload физически может достать
-        (не вина ретривера, что потолок < корпуса). Импользовать вместе
-        с coverage_pct: последний — «процент корпуса», этот — «насколько
-        хорошо отработано в рамках достижимого».
-        """
-        ceil = self.reachability_ceiling
-        if ceil <= 0:
+        ceiling = self.reachability_ceiling
+        if ceiling == 0:
             return 0.0
-        # Точный подсчёт через dark_matter_ids (n - dark = found). Реконструкция
-        # из округлённого coverage_pct (JSON round(4)) на 260k-корпусе давала бы
-        # ошибку до ±13 чанков — fallback только если ids не заполнены.
-        if self.dark_matter_ids or self.coverage_pct >= 1.0:
-            found = self.n_chunks - len(self.dark_matter_ids)
-        else:
-            found = round(self.coverage_pct * self.n_chunks)
-        return min(1.0, found / ceil)
+        found = self.found_count
+        if found is None:
+            if self.dark_matter_ids or self.coverage_pct >= 1.0:
+                found = self.n_chunks - len(self.dark_matter_ids)
+            else:
+                found = round(self.coverage_pct * self.n_chunks)
+        return min(1.0, found / ceiling)
+
+    @property
+    def lorenz_points_total(self) -> int:
+        return self.n_chunks + 1 if self.n_chunks else 0
 
     def __str__(self) -> str:
         lines = [
             "=" * 64,
-            "RETRIEVAL FAIRNESS — отчёт exposure",
+            "RETRIEVAL FAIRNESS — exposure report",
             "=" * 64,
-            f"  Корпус:   {self.n_chunks} чанков",
-            f"  Запросов: {self.n_queries}",
-            f"  top-k:    {self.top_k}",
+            f"  Corpus:  {self.n_chunks} chunks",
+            f"  Queries: {self.n_queries}",
+            f"  top-k:   {self.top_k}",
             "-" * 64,
-            f"  Coverage:     {self.coverage_pct * 100:6.2f}%   (доля корпуса, что находится)",
-            f"  из достижимого: {self.coverage_of_ceiling * 100:6.2f}%   (от workload-потолка {self.reachability_ceiling} чанков)",
-            f"  Dark matter:  {self.dark_matter_pct * 100:6.2f}%   (доля, что НИ РАЗУ не нашлась)",
-            f"  Gini:         {self.gini:.3f}   (0=равномерно, 1=концентрация)",
-            f"  Hub capture:  top5={self.hub_capture_top5 * 100:5.1f}%  top10={self.hub_capture_top10 * 100:5.1f}%",
+            f"  Coverage:       {self.coverage_pct * 100:6.2f}%",
+            f"  Of reachable:   {self.coverage_of_ceiling * 100:6.2f}% (ceiling {self.reachability_ceiling})",
+            f"  Dark matter:    {self.dark_matter_pct * 100:6.2f}%",
+            f"  Gini:           {self.gini:.3f}",
+            f"  Hub capture:    top5={self.hub_capture_top5 * 100:5.1f}% "
+            f"top10={self.hub_capture_top10 * 100:5.1f}%",
             "-" * 64,
-            "  Top хабы (id: сколько раз в top-k):",
+            "  Top hubs (id: top-k occurrences):",
         ]
-        for cid, cnt in self.hub_leaderboard:
-            lines.append(f"    {cid:30} {cnt}")
-        lines.append("-" * 64)
-        lines.append(f"  Dark matter: {len(self.dark_matter_ids)} чанков ни разу не найдены")
-        lines.append("=" * 64)
+        lines.extend(f"    {chunk_id:30} {count}" for chunk_id, count in self.hub_leaderboard)
+        lines.extend(
+            [
+                "-" * 64,
+                f"  Dark matter: {self.dark_matter_count} chunks never retrieved",
+                "=" * 64,
+            ]
+        )
         return "\n".join(lines)
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, object]:
         return {
             "n_chunks": self.n_chunks,
             "n_queries": self.n_queries,
@@ -231,7 +238,7 @@ class FairnessReport:
             "hub_capture_top5": round(self.hub_capture_top5, 4),
             "hub_capture_top10": round(self.hub_capture_top10, 4),
             "hub_leaderboard": self.hub_leaderboard,
-            "dark_matter_count": len(self.dark_matter_ids),
+            "dark_matter_count": self.dark_matter_count,
             "dark_matter_ids": self.dark_matter_ids,
             "lorenz_curve": [[round(x, 6), round(y, 6)] for x, y in self.lorenz_curve],
             "reachability_ceiling": self.reachability_ceiling,
@@ -244,24 +251,37 @@ def build_report(
     n_queries: int,
     top_k: int,
     leaderboard_n: int = 10,
+    *,
+    detail: str = "full",
 ) -> FairnessReport:
-    """Собрать сводный FairnessReport из retrieval-frequency."""
-    _validate_freqs(freqs)
+    """Build a report with one validation/sort pass.
+
+    ``detail='summary'`` omits O(n) Lorenz and dark-ID collections while
+    retaining exact counts and metrics.
+    """
     require_non_negative_int(n_queries, "n_queries")
     require_positive_int(top_k, "top_k")
     require_non_negative_int(leaderboard_n, "leaderboard_n")
-    n = len(freqs)
-    dm_ids = [cid for cid, v in freqs.items() if v == 0]
+    if detail not in {"full", "summary"}:
+        raise ValueError("detail must be 'full' or 'summary'")
+
+    stats = _stats(freqs)
+    dark_count = stats.n - stats.found
+    dark_ids = [chunk_id for chunk_id, value in stats.items if value == 0] if detail == "full" else []
+    leaderboard = sorted(stats.items, key=lambda item: (-item[1], item[0]))[:leaderboard_n]
+    coverage_value = _coverage(stats)
     return FairnessReport(
-        n_chunks=n,
+        n_chunks=stats.n,
         n_queries=n_queries,
         top_k=top_k,
-        coverage_pct=coverage(freqs),
-        dark_matter_pct=dark_matter(freqs),
-        gini=gini(freqs),
-        hub_capture_top5=hub_capture(freqs, 5),
-        hub_capture_top10=hub_capture(freqs, 10),
-        hub_leaderboard=hub_leaderboard(freqs, leaderboard_n),
-        lorenz_curve=lorenz(freqs),
-        dark_matter_ids=dm_ids,
+        coverage_pct=coverage_value,
+        dark_matter_pct=(1.0 - coverage_value if stats.n else 0.0),
+        gini=_gini(stats),
+        hub_capture_top5=_hub_capture(stats, 5),
+        hub_capture_top10=_hub_capture(stats, 10),
+        hub_leaderboard=leaderboard,
+        lorenz_curve=_lorenz(stats) if detail == "full" else [],
+        dark_matter_ids=dark_ids,
+        found_count=stats.found,
+        dark_matter_count_exact=dark_count,
     )

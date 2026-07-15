@@ -1,6 +1,7 @@
 """test_qrels_validate.py — smoke-тест scripts/qrels_validate.py на мини-фикстуре."""
 
 from __future__ import annotations
+
 import json
 import os
 import subprocess

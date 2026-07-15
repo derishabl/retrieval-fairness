@@ -60,7 +60,7 @@ retrieval-fairness demo-diff --top-k 5     # regression diff for an embedder mig
 
 ```bash
 # corpus.jsonl: {"id": "...", "text": "...", "vector": [...]}
-# queries.jsonl: {"id": "...", "vector": [...]}
+# queries.jsonl: {"id": "...", "text": "...", "vector": [...]}
 retrieval-fairness probe --corpus corpus.jsonl --queries queries.jsonl \
     --top-k 10 --json report.json --html dashboard.html
 ```
@@ -80,16 +80,27 @@ retrieval-fairness synth --corpus corpus.jsonl --top-k 10 --html dashboard.html
 
 ```bash
 retrieval-fairness diff --baseline before.json --candidate after.json
-# For an intentional rechunking migration (different corpus fingerprint):
+# For precomputed inputs without source text, opt into ID-only comparison:
+retrieval-fairness diff --baseline before.json --candidate after.json \
+    --workload-policy same-ids --corpus-policy same-ids
+# For an intentional rechunking migration:
 retrieval-fairness diff --baseline before.json --candidate after.json \
     --corpus-policy allow-change
 ```
 
-Baselines use schema v2 and contain ordered query IDs plus deterministic corpus
-and workload SHA-256 fingerprints. On load, reports are rebuilt from raw hits
-and frequencies; saved metric values are never trusted as source data. Legacy
-0.1.0 baselines remain readable, using positional query alignment only when
-explicitly allowed by strict overlap gates.
+Schema v3 separates logical ID sets, physical order, semantic content/revision,
+and FAISS index mapping identities. `same-content` is the CLI/gate default:
+changing query or chunk text under the same ID is rejected, while reordering
+rows or changing embedder vectors is allowed. Precomputed workloads/stores
+without source text must supply `--workload-revision` / `--corpus-revision` at
+probe time or explicitly opt into `same-ids`. Legacy schema v1/v2 baselines
+remain readable.
+
+Every full baseline also records typed, credential-safe provenance: Python and
+adapter versions, metric/normalization, search parameters, top-k, model
+revision, and caller run/commit IDs. Database URLs and API keys are rejected
+from metadata and never serialized. Reports are always rebuilt from raw hits
+and frequencies on load; saved metrics are not a source of truth.
 
 ### CI gate
 
@@ -98,6 +109,19 @@ retrieval-fairness gate --baseline v1.json --candidate new.json --strict \
     --max-coverage-drop 0.05 --max-dark-matter-rise 0.05
 # exit 1 in strict mode if coverage dropped > 5 pp -> CI blocks the deploy
 ```
+
+### Compact summary artifact
+
+```bash
+retrieval-fairness probe --corpus corpus.jsonl --queries queries.jsonl \
+    --summary-json summary.json --max-lorenz-points 512
+```
+
+A summary contains exact metrics/counts and a deterministic quantile-sampled
+Lorenz curve, but no raw hits, frequencies, full query IDs, or dark IDs by
+default. It is intentionally rejected by `load_probe()` and cannot be used as
+a regression source. The typical 1M-corpus summary stays below 1 MiB; rerun the
+benchmark with `python -m scripts.benchmark_quality --assert-targets`.
 
 ### Cross-check dark matter against qrels ("lost gold")
 
@@ -115,7 +139,7 @@ A qrels pair is relevant only when `grade >= --min-relevance-grade` (default
 1), so zero and negative judgments are ignored. The output reports **micro
 recall@k** over all relevant query/document pairs and **macro recall@k** over
 queries that have at least one relevant in-corpus document. `recall_at_k` is
-retained as a compatibility alias for micro recall for the 0.1.x cycle.
+a read-only compatibility alias for micro recall in JSON and Python.
 
 ## Metrics
 
@@ -148,7 +172,8 @@ retained as a compatibility alias for micro recall for the 0.1.x cycle.
 
 Real-scale case study (BEIR NQ, ~50% dark matter, lexical→dense
 regression diff): `docs/case_study_nq.md`. Store adapters: `docs/adapters.md`.
-Comparison with related work: `docs/comparison.md`.
+Comparison with related work: `docs/comparison.md`. Identity, provenance, and
+artifact contracts: `docs/reproducibility.md`.
 
 ## Tests
 

@@ -1,12 +1,14 @@
 """test_dashboard.py — HTML dashboard generation."""
 
 from __future__ import annotations
-import tempfile
+
 import os
-from retrieval_fairness.types import Chunk, Query
-from retrieval_fairness.stores import InMemoryVectorStore
+import tempfile
+
+from retrieval_fairness.dashboard import build_html, render_dashboard
 from retrieval_fairness.probe import probe
-from retrieval_fairness.dashboard import render_dashboard, build_html
+from retrieval_fairness.stores import InMemoryVectorStore
+from retrieval_fairness.types import Chunk, Query
 
 
 def _toy():

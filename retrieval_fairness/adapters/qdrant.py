@@ -8,10 +8,11 @@ adapters/qdrant.py — Qdrant-адаптер.
 """
 
 from __future__ import annotations
-from typing import Iterator
 
-from retrieval_fairness.types import Hit
+from collections.abc import Iterator
+
 from retrieval_fairness.adapters.base import BaseVectorStoreAdapter
+from retrieval_fairness.types import Hit
 
 
 class QdrantAdapter(BaseVectorStoreAdapter):
@@ -83,10 +84,14 @@ class QdrantAdapter(BaseVectorStoreAdapter):
                 limit=top_k,
                 search_params=SearchParams(hnsw_ef=128, exact=False),
             )
-        out = []
-        for rank, point in enumerate(res, start=1):
-            out.append(Hit(chunk_id=str(point.id), score=float(point.score), rank=rank))
-        return out
+        # Stabilize ordering among returned ties. Qdrant controls which IDs are
+        # included at an approximate top-k boundary, so that limitation is also
+        # recorded in provenance.
+        selected = sorted(res, key=lambda point: (-float(point.score), str(point.id)))
+        return [
+            Hit(chunk_id=str(point.id), score=float(point.score), rank=rank)
+            for rank, point in enumerate(selected, start=1)
+        ]
 
     def _list_chunk_ids(self) -> Iterator[str]:
         # scroll API — пагинация по всему корпусу
@@ -104,6 +109,30 @@ class QdrantAdapter(BaseVectorStoreAdapter):
                 yield str(p.id)
             if offset is None:
                 break
+
+    def provenance_metadata(self) -> dict[str, object]:
+        try:
+            from importlib.metadata import version
+
+            adapter_version = version("qdrant-client")
+        except Exception:
+            adapter_version = None
+        return {
+            "adapter": "qdrant",
+            "adapter_version": adapter_version,
+            "adapter_config": {
+                "collection": self._collection,
+                "vector_name": self._vector_name,
+            },
+            "distance_metric": None,
+            "normalized": None,
+            "search_params": {
+                "hnsw_ef": 128,
+                "exact": False,
+                "tie_policy": "score_desc_chunk_id_asc",
+                "boundary_ties_backend_limited": True,
+            },
+        }
 
     @property
     def size(self) -> int:

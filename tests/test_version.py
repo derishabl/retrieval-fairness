@@ -1,6 +1,7 @@
 """test_version.py — гард: __version__ не расходится с pyproject.toml."""
 
 from __future__ import annotations
+
 import os
 import re
 

@@ -1,15 +1,16 @@
 """test_diff.py — regression diff tests."""
 
 from __future__ import annotations
+
 from retrieval_fairness.diff import (
-    per_chunk_delta,
-    newly_dark_matter,
-    rescued_from_dark_matter,
-    per_query_overlap,
     diff_reports,
+    newly_dark_matter,
+    per_chunk_delta,
+    per_query_overlap,
+    rescued_from_dark_matter,
 )
-from retrieval_fairness.probe import ProbeResult
 from retrieval_fairness.metrics import FairnessReport
+from retrieval_fairness.probe import ProbeResult
 
 
 def _mock_result(freqs, hits, cov, dm, gini=0.3, hub5=0.4) -> ProbeResult:

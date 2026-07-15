@@ -1,12 +1,14 @@
 """test_serialize.py — probe save/load round-trip."""
 
 from __future__ import annotations
-import tempfile
+
 import os
-from retrieval_fairness.types import Chunk, Query
-from retrieval_fairness.stores import InMemoryVectorStore
+import tempfile
+
 from retrieval_fairness.probe import probe
-from retrieval_fairness.serialize import save_probe, load_probe
+from retrieval_fairness.serialize import load_probe, save_probe
+from retrieval_fairness.stores import InMemoryVectorStore
+from retrieval_fairness.types import Chunk, Query
 
 
 def _toy():

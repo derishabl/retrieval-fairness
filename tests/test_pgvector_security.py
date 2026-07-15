@@ -38,6 +38,48 @@ def test_validate_ident_rejects_injection():
             pass
 
 
+def test_pgvector_orders_logical_ids_and_score_ties(monkeypatch):
+    import sys
+    import types
+
+    statements = []
+
+    class Cursor:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return None
+
+        def execute(self, sql, params=None):
+            statements.append((sql, params))
+
+        def __iter__(self):
+            return iter([("A",), ("B",)])
+
+        def fetchall(self):
+            return [("A", 0.1), ("B", 0.1)]
+
+    class Connection:
+        closed = False
+
+        def cursor(self):
+            return Cursor()
+
+    module = types.ModuleType("psycopg")
+    module.connect = lambda *_args, **_kwargs: Connection()
+    monkeypatch.setitem(sys.modules, "psycopg", module)
+
+    from retrieval_fairness.adapters.pgvector import PgvectorAdapter
+
+    adapter = PgvectorAdapter("postgresql://credential-is-never-serialized")
+    assert adapter.corpus_ids() == ["A", "B"]
+    assert [hit.chunk_id for hit in adapter.search([1.0], 2)] == ["A", "B"]
+    assert "ORDER BY id ASC" in statements[0][0]
+    assert "ORDER BY embedding <=> %s, id ASC" in statements[1][0]
+    assert "credential" not in str(adapter.provenance_metadata())
+
+
 def test_distance_op_whitelist():
     _, allowed, _ = _import_validators()
     assert allowed == {"<=>", "<->", "<#>"}

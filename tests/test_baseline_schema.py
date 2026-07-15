@@ -33,15 +33,19 @@ def _saved_dict(tmp_path: Path) -> tuple[Path, dict]:
     return path, json.loads(path.read_text(encoding="utf-8"))
 
 
-def test_v2_roundtrip_ids_fingerprints_and_metadata(tmp_path):
+def test_v3_roundtrip_identities_and_metadata(tmp_path):
     path, raw = _saved_dict(tmp_path)
     loaded = load_probe(str(path))
-    assert raw["schema_version"] == 2
-    assert raw["package_version"] == "0.1.1"
+    assert raw["schema_version"] == 3
+    assert raw["package_version"] == "0.2.0"
     assert raw["metadata"]["created_at"].endswith("Z")
     assert loaded.query_ids == ["q1", "q2"]
     assert loaded.corpus_fingerprint.startswith("sha256:")
     assert loaded.workload_fingerprint.startswith("sha256:")
+    assert loaded.workload_ids_fingerprint.startswith("sha256:")
+    assert loaded.workload_content_fingerprint is None
+    assert loaded.corpus_set_fingerprint.startswith("sha256:")
+    assert loaded.corpus_content_fingerprint.startswith("sha256:")
 
 
 @pytest.mark.parametrize(
@@ -91,9 +95,12 @@ def test_legacy_inconsistent_report_strict_vs_relaxed():
     assert load_probe(path, strict_integrity=False).report.coverage_pct == 0.5
 
 
-def test_compact_summary_has_exact_count_and_truncation():
+def test_compact_summary_has_exact_counts_and_bounded_lorenz():
     summary = probe_summary_to_json(_result(), max_exported_dark_ids=0)
     assert summary["summary_only"] is True
     assert "freqs" not in summary
+    assert "hits_per_query" not in summary
+    assert "query_ids" not in summary
     assert summary["report"]["dark_matter_count"] == 1
-    assert summary["report"]["dark_matter_ids_truncated"] is True
+    assert "dark_matter_ids" not in summary["report"]
+    assert summary["report"]["lorenz_points_exported"] <= 512

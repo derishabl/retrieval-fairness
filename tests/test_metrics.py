@@ -5,14 +5,15 @@ test_metrics.py — юнит-тесты метрик exposure.
 """
 
 from __future__ import annotations
+
 from retrieval_fairness.metrics import (
+    build_report,
     coverage,
     dark_matter,
     gini,
     hub_capture,
     lorenz,
     retrieval_frequencies,
-    build_report,
 )
 
 

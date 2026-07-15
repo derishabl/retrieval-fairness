@@ -1,11 +1,12 @@
 """test_qrels.py — qrels 'lost gold' cross-check (first-class feature)."""
 
 from __future__ import annotations
+
 import json
 import os
 import tempfile
 
-from retrieval_fairness.qrels import validate_qrels, QrelsValidation
+from retrieval_fairness.qrels import QrelsValidation, validate_qrels
 
 
 def _write(d, name, obj):
@@ -49,7 +50,19 @@ def test_lost_gold_and_recall():
 
 
 def test_to_dict_roundtrips():
-    v = QrelsValidation(10, 5, 4, 3, 2, 0.5, 0.67, 3, 1, round(1 / 3, 4), ["x"])
+    v = QrelsValidation(
+        n_chunks=10,
+        n_queries=5,
+        dark_matter=4,
+        relevant_in_corpus=3,
+        dark_and_relevant=2,
+        dark_relevant_pct_of_dark=0.5,
+        dark_relevant_pct_of_relevant=0.67,
+        qrels_pairs_total=3,
+        qrels_pairs_in_topk=1,
+        micro_recall_at_k=round(1 / 3, 4),
+        dark_relevant_ids=["x"],
+    )
     d = v.to_dict()
     assert d["dark_and_relevant"] == 2
     assert d["recall_at_k"] == round(1 / 3, 4)

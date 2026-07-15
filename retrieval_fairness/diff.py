@@ -90,6 +90,8 @@ class DiffReport:
     worst_gains: list[tuple[str, int]] = field(default_factory=list)
     legacy_positional_alignment: bool = False
     corpus_changed: bool = False
+    workload_policy: str = "same-ids"
+    corpus_policy: str = "same-ids"
 
     def __str__(self) -> str:
         lines = [
@@ -133,13 +135,40 @@ class DiffReport:
             "worst_gains": self.worst_gains[:20],
             "legacy_positional_alignment": self.legacy_positional_alignment,
             "corpus_changed": self.corpus_changed,
+            "workload_policy": self.workload_policy,
+            "corpus_policy": self.corpus_policy,
         }
 
 
 def _corpus_changed(baseline: ProbeResult, candidate: ProbeResult) -> bool:
-    if baseline.corpus_fingerprint and candidate.corpus_fingerprint:
-        return baseline.corpus_fingerprint != candidate.corpus_fingerprint
-    return list(baseline.freqs) != list(candidate.freqs)
+    baseline_id = baseline.corpus_set_fingerprint or baseline.corpus_fingerprint
+    candidate_id = candidate.corpus_set_fingerprint or candidate.corpus_fingerprint
+    if baseline_id and candidate_id:
+        return baseline_id != candidate_id
+    return set(baseline.freqs) != set(candidate.freqs)
+
+
+def _require_semantic_identity(
+    *,
+    label: str,
+    baseline_content: str | None,
+    candidate_content: str | None,
+    baseline_revision: str | None,
+    candidate_revision: str | None,
+    opt_in_policy: str,
+) -> None:
+    if baseline_content is not None and candidate_content is not None:
+        if baseline_content != candidate_content:
+            raise ValueError(f"{label} content fingerprints differ")
+        return
+    if baseline_revision is not None and candidate_revision is not None:
+        if baseline_revision != candidate_revision:
+            raise ValueError(f"{label} revisions differ")
+        return
+    raise ValueError(
+        f"same-content {label} comparison requires content fingerprints or matching revisions; "
+        f"use {opt_in_policy!r} only as an explicit legacy/precomputed opt-in"
+    )
 
 
 def diff_reports(
@@ -147,17 +176,44 @@ def diff_reports(
     candidate: ProbeResult,
     *,
     corpus_policy: str = "same",
+    workload_policy: str = "same-ids",
 ) -> DiffReport:
-    """Compare two results, validating workload and corpus compatibility."""
-    if corpus_policy not in {"same", "allow-change"}:
-        raise ValueError("corpus_policy must be 'same' or 'allow-change'")
+    """Compare results under explicit logical identity policies.
+
+    ``same`` remains a compatibility alias for ``same-ids``. CI gates pass
+    ``same-content`` by default.
+    """
+    valid_corpus = {"same", "same-content", "same-ids", "allow-change"}
+    if corpus_policy not in valid_corpus:
+        raise ValueError(f"corpus_policy must be one of {sorted(valid_corpus)!r}")
+    if workload_policy not in {"same-content", "same-ids"}:
+        raise ValueError("workload_policy must be 'same-content' or 'same-ids'")
     if baseline.report is None or candidate.report is None:
         raise ValueError("both ProbeResult objects must contain a report")
 
+    normalized_corpus_policy = "same-ids" if corpus_policy == "same" else corpus_policy
     corpus_changed = _corpus_changed(baseline, candidate)
-    if corpus_changed and corpus_policy == "same":
+    if corpus_changed and normalized_corpus_policy != "allow-change":
         raise ValueError(
             "corpus fingerprints differ; use corpus_policy='allow-change' for a chunking migration"
+        )
+    if normalized_corpus_policy == "same-content":
+        _require_semantic_identity(
+            label="corpus",
+            baseline_content=baseline.corpus_content_fingerprint,
+            candidate_content=candidate.corpus_content_fingerprint,
+            baseline_revision=baseline.corpus_revision,
+            candidate_revision=candidate.corpus_revision,
+            opt_in_policy="same-ids",
+        )
+    if workload_policy == "same-content":
+        _require_semantic_identity(
+            label="workload",
+            baseline_content=baseline.workload_content_fingerprint,
+            candidate_content=candidate.workload_content_fingerprint,
+            baseline_revision=baseline.workload_revision,
+            candidate_revision=candidate.workload_revision,
+            opt_in_policy="same-ids",
         )
 
     overlaps = per_query_overlap(
@@ -190,4 +246,6 @@ def diff_reports(
         worst_gains=gains,
         legacy_positional_alignment=not bool(baseline.query_ids),
         corpus_changed=corpus_changed,
+        workload_policy=workload_policy,
+        corpus_policy=normalized_corpus_policy,
     )

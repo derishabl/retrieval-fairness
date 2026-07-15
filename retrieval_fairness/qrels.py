@@ -6,7 +6,7 @@ import json
 from dataclasses import dataclass, field
 
 from retrieval_fairness.serialize import load_probe
-from retrieval_fairness.validation import require_positive_int, validate_unique_ids
+from retrieval_fairness.validation import require_integral, require_positive_int, validate_unique_ids
 
 
 def load_qrels(path: str) -> dict[str, dict[str, int]]:
@@ -16,9 +16,16 @@ def load_qrels(path: str) -> dict[str, dict[str, int]]:
         raise ValueError("qrels must be an object")
     output: dict[str, dict[str, int]] = {}
     for query_id, docs in raw.items():
+        if not isinstance(query_id, str) or not query_id:
+            raise ValueError("qrels query IDs must be non-empty strings")
         if not isinstance(docs, dict):
             raise ValueError(f"qrels[{query_id!r}] must be an object")
-        output[str(query_id)] = {str(doc_id): int(grade) for doc_id, grade in docs.items()}
+        judgments: dict[str, int] = {}
+        for doc_id, grade in docs.items():
+            if not isinstance(doc_id, str) or not doc_id:
+                raise ValueError(f"qrels[{query_id!r}] document IDs must be non-empty strings")
+            judgments[doc_id] = require_integral(grade, f"qrels[{query_id!r}][{doc_id!r}]")
+        output[query_id] = judgments
     return output
 
 
@@ -43,12 +50,16 @@ class QrelsValidation:
     dark_relevant_pct_of_relevant: float
     qrels_pairs_total: int
     qrels_pairs_in_topk: int
-    recall_at_k: float
+    micro_recall_at_k: float
     dark_relevant_ids: list[str] = field(default_factory=list)
-    micro_recall_at_k: float = 0.0
     macro_recall_at_k: float = 0.0
     per_query_recall: dict[str, float] = field(default_factory=dict)
     queries_with_relevant_docs: int = 0
+
+    @property
+    def recall_at_k(self) -> float:
+        """Read-only compatibility alias for micro recall."""
+        return self.micro_recall_at_k
 
     def to_dict(self) -> dict:
         return {
@@ -167,9 +178,8 @@ def validate_qrels(
         dark_relevant_pct_of_relevant=(round(len(dark_relevant) / len(relevant), 4) if relevant else 0.0),
         qrels_pairs_total=pairs_total,
         qrels_pairs_in_topk=pairs_hit,
-        recall_at_k=micro,
-        dark_relevant_ids=sorted(dark_relevant),
         micro_recall_at_k=micro,
+        dark_relevant_ids=sorted(dark_relevant),
         macro_recall_at_k=macro,
         per_query_recall={key: round(value, 4) for key, value in per_query.items()},
         queries_with_relevant_docs=len(per_query),

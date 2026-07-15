@@ -1,15 +1,17 @@
 """test_faiss_adapter.py — FAISS adapter vs InMemory consistency."""
 
 from __future__ import annotations
-import tempfile
+
 import os
+import tempfile
+
 import numpy as np
 import pytest
 
-from retrieval_fairness.types import Chunk, Query
-from retrieval_fairness.adapters.inmemory import InMemoryVectorStore
 from retrieval_fairness.adapters.faiss import FaissAdapter, build_flat_index
+from retrieval_fairness.adapters.inmemory import InMemoryVectorStore
 from retrieval_fairness.probe import probe
+from retrieval_fairness.types import Chunk, Query
 
 pytest.importorskip("faiss", reason="FAISS adapter extra is not installed")
 
@@ -77,6 +79,30 @@ def test_faiss_metrics_match_inmemory():
     assert abs(faiss_result.report.gini - inmem.report.gini) < 1e-6
     # частоты по чанкам совпадают
     assert faiss_result.freqs == inmem.freqs
+
+
+def test_faiss_manifest_rejects_other_index_of_same_length():
+    vecs, ids, _ = _toy()
+    with tempfile.TemporaryDirectory() as d:
+        first_index = os.path.join(d, "first.faiss")
+        first_manifest = os.path.join(d, "first.json")
+        second_index = os.path.join(d, "second.faiss")
+        second_manifest = os.path.join(d, "second.json")
+        build_flat_index(vecs.tolist(), ids, first_index, first_manifest)
+        build_flat_index((vecs * 0.5).tolist(), ids, second_index, second_manifest)
+        with pytest.raises(ValueError, match="index_sha256"):
+            FaissAdapter(first_index, second_manifest)
+
+
+def test_faiss_validates_query_dimension_before_native_search():
+    vecs, ids, _ = _toy()
+    with tempfile.TemporaryDirectory() as d:
+        index_path = os.path.join(d, "idx.faiss")
+        manifest_path = os.path.join(d, "ids.json")
+        build_flat_index(vecs.tolist(), ids, index_path, manifest_path)
+        adapter = FaissAdapter(index_path, manifest_path)
+        with pytest.raises(ValueError, match="dimension"):
+            adapter.search([1.0, 2.0, 3.0], top_k=2)
 
 
 def test_faiss_ids_map_length_mismatch():

@@ -1,13 +1,15 @@
 """test_gate.py — CI gate rules."""
 
 from __future__ import annotations
-import tempfile
+
 import os
-from retrieval_fairness.types import Chunk, Query
-from retrieval_fairness.stores import InMemoryVectorStore
+import tempfile
+
+from retrieval_fairness.gate import evaluate_gate
 from retrieval_fairness.probe import probe
 from retrieval_fairness.serialize import save_probe
-from retrieval_fairness.gate import evaluate_gate
+from retrieval_fairness.stores import InMemoryVectorStore
+from retrieval_fairness.types import Chunk, Query
 
 
 def _save(result, d, name):
@@ -23,7 +25,10 @@ def _toy_results():
         Chunk(id="C", text="c", vector=[0.0, 1.0]),
         Chunk(id="D", text="d", vector=[0.0, -1.0]),
     ]
-    queries = [Query(id="q1", vector=[1.0, 0.0]), Query(id="q2", vector=[1.0, 0.005])]
+    queries = [
+        Query(id="q1", vector=[1.0, 0.0], text="first query"),
+        Query(id="q2", vector=[1.0, 0.005], text="second query"),
+    ]
     good = probe(InMemoryVectorStore(chunks), queries, top_k=2)
     # "ухудшенный": другой top-k -> coverage падает (D не находится и так, но top_k=1 -> меньше coverage)
     bad = probe(InMemoryVectorStore(chunks), queries, top_k=1)
@@ -63,7 +68,10 @@ def test_gate_fails_when_coverage_actually_drops():
         Chunk(id="C", text="c", vector=[0.9, 0.0]),  # близко к A
         Chunk(id="D", text="d", vector=[0.9, 0.01]),  # близко к B
     ]
-    queries = [Query(id="q1", vector=[1.0, 0.0]), Query(id="q2", vector=[1.0, 0.005])]
+    queries = [
+        Query(id="q1", vector=[1.0, 0.0], text="first query"),
+        Query(id="q2", vector=[1.0, 0.005], text="second query"),
+    ]
     base = probe(InMemoryVectorStore(chunks), queries, top_k=4)  # все находятся
     cand = probe(InMemoryVectorStore(chunks), queries, top_k=1)  # только 2 из 4
     assert base.report.coverage_pct > cand.report.coverage_pct
@@ -117,7 +125,10 @@ def _real_drop_chunks():
 
 
 def _real_drop_queries():
-    return [Query(id="q1", vector=[1.0, 0.0]), Query(id="q2", vector=[1.0, 0.005])]
+    return [
+        Query(id="q1", vector=[1.0, 0.0], text="first query"),
+        Query(id="q2", vector=[1.0, 0.005], text="second query"),
+    ]
 
 
 def test_gate_rejects_out_of_range_threshold():
@@ -164,6 +175,7 @@ def test_probe_to_gate_end_to_end_cli(tmp_path=None):
     """
     import os
     import tempfile
+
     from retrieval_fairness.serialize import save_probe
 
     chunks = _real_drop_chunks()

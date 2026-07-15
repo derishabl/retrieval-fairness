@@ -11,13 +11,15 @@ cli.py — CLI retrieval_fairness.
 """
 
 from __future__ import annotations
+
 import argparse
+import contextlib
 import json
 import sys
 
-from retrieval_fairness.types import Chunk, Query
 from retrieval_fairness.adapters import InMemoryVectorStore
 from retrieval_fairness.probe import probe
+from retrieval_fairness.types import Chunk, Query
 
 
 def _cli_error(msg: str) -> int:
@@ -37,8 +39,12 @@ def _wrap_cli(fn):
             return fn(args)
         except FileNotFoundError as e:
             return _cli_error(f"файл не найден: {e.filename or e}")
+        except PermissionError as e:
+            return _cli_error(f"нет доступа к файлу: {e.filename or e}")
         except (ValueError, KeyError) as e:
             return _cli_error(str(e))
+        except OSError as e:
+            return _cli_error(f"ошибка ввода-вывода: {e}")
         except ImportError as e:
             return _cli_error(f"отсутствует зависимость: {e}. Установите optional-dep, см. docs/adapters.md")
 
@@ -90,7 +96,11 @@ def _build_store_from_args(args, corpus: list[Chunk] | None = None):
     if store_name == "faiss":
         from retrieval_fairness.adapters.faiss import FaissAdapter
 
-        return FaissAdapter(index_path=args.index_path, ids_map_path=getattr(args, "ids_map", None))
+        return FaissAdapter(
+            index_path=args.index_path,
+            ids_map_path=getattr(args, "ids_map", None),
+            allow_legacy_ids_map=getattr(args, "allow_legacy_faiss_ids_map", False),
+        )
     if store_name == "pgvector":
         from retrieval_fairness.adapters.pgvector import PgvectorAdapter
 
@@ -112,7 +122,12 @@ def _add_store_args(p) -> None:
     # inmemory: --corpus (уже есть отдельно)
     # faiss
     p.add_argument("--index-path", help="FAISS: путь к .faiss индексу")
-    p.add_argument("--ids-map", help="FAISS: JSON {ids:[...]} sidecar")
+    p.add_argument("--ids-map", help="FAISS: checksum-bound JSON manifest")
+    p.add_argument(
+        "--allow-legacy-faiss-ids-map",
+        action="store_true",
+        help="FAISS: explicitly accept an unbound legacy {ids:[...]} sidecar",
+    )
     # pgvector
     p.add_argument("--database-url", help="pgvector: postgres connection string")
     p.add_argument("--table", default="docs", help="pgvector: таблица")
@@ -129,7 +144,20 @@ def cmd_probe(args: argparse.Namespace) -> int:
     corpus = _load_corpus(args.corpus) if args.corpus else None
     queries = _load_queries(args.queries)
     store = _build_store_from_args(args, corpus=corpus)
-    result = probe(store, queries, top_k=args.top_k)
+    report_detail = "summary" if args.summary_json and not args.json and not args.html else "full"
+    result = probe(
+        store,
+        queries,
+        top_k=args.top_k,
+        corpus_texts={chunk.id: chunk.text for chunk in corpus} if corpus else None,
+        workload_revision=args.workload_revision,
+        corpus_revision=args.corpus_revision,
+        embedder=args.embedder_name,
+        embedder_revision=args.embedder_revision,
+        run_id=args.run_id,
+        git_commit=args.git_commit,
+        report_detail=report_detail,
+    )
     if result.report is None:
         raise RuntimeError("probe returned no report")
     print(result.report)
@@ -146,6 +174,7 @@ def cmd_probe(args: argparse.Namespace) -> int:
             result,
             args.summary_json,
             max_exported_dark_ids=args.max_exported_dark_ids,
+            max_lorenz_points=args.max_lorenz_points,
         )
         print(f"\nSummary JSON сохранён: {args.summary_json}")
     if args.html:
@@ -167,13 +196,18 @@ def cmd_demo(args: argparse.Namespace) -> int:
 
 
 def cmd_diff(args: argparse.Namespace) -> int:
-    from retrieval_fairness.serialize import load_probe
     from retrieval_fairness.diff import diff_reports
+    from retrieval_fairness.serialize import load_probe
 
     try:
         base = load_probe(args.baseline)
         cand = load_probe(args.candidate)
-        d = diff_reports(base, cand, corpus_policy=args.corpus_policy)
+        d = diff_reports(
+            base,
+            cand,
+            corpus_policy=args.corpus_policy,
+            workload_policy=args.workload_policy,
+        )
     except (ValueError, FileNotFoundError, KeyError) as e:
         print(f"ОШИБКА: {e}", file=sys.stderr)
         return 2
@@ -252,6 +286,7 @@ def cmd_synth(args: argparse.Namespace) -> int:
             result,
             args.summary_json,
             max_exported_dark_ids=args.max_exported_dark_ids,
+            max_lorenz_points=args.max_lorenz_points,
         )
         print(f"\nSummary JSON сохранён: {args.summary_json}")
     if args.html:
@@ -270,10 +305,8 @@ def main(argv: list[str] | None = None) -> int:
 
     for stream in (sys.stdout, sys.stderr):
         if hasattr(stream, "reconfigure"):
-            try:
+            with contextlib.suppress(Exception):
                 stream.reconfigure(encoding="utf-8", errors="replace")
-            except Exception:
-                pass
     parser = argparse.ArgumentParser(
         prog="retrieval_fairness",
         description="exposure-аудит векторного поиска: coverage, dark matter, Gini, CI-гейт",
@@ -286,7 +319,14 @@ def main(argv: list[str] | None = None) -> int:
     p_probe.add_argument("--top-k", type=int, default=10)
     p_probe.add_argument("--json", help="путь для полного JSON-экспорта")
     p_probe.add_argument("--summary-json", help="компактный JSON без raw frequencies/hits")
-    p_probe.add_argument("--max-exported-dark-ids", type=int, default=1000)
+    p_probe.add_argument("--max-exported-dark-ids", type=int, default=0)
+    p_probe.add_argument("--max-lorenz-points", type=int, default=512)
+    p_probe.add_argument("--workload-revision", help="revision for queries without source text")
+    p_probe.add_argument("--corpus-revision", help="revision for stores without source chunk content")
+    p_probe.add_argument("--embedder-name", help="embedder/model family recorded in provenance")
+    p_probe.add_argument("--embedder-revision", help="immutable model revision recorded in provenance")
+    p_probe.add_argument("--run-id", help="caller-provided reproducible run ID")
+    p_probe.add_argument("--git-commit", help="caller-provided source commit")
     p_probe.add_argument("--compress", action="store_true", help="gzip для полного JSON")
     p_probe.add_argument("--html", help="путь для HTML-дашборда")
     _add_store_args(p_probe)
@@ -300,7 +340,12 @@ def main(argv: list[str] | None = None) -> int:
     p_diff.add_argument("--baseline", required=True)
     p_diff.add_argument("--candidate", required=True)
     p_diff.add_argument("--json", help="путь для JSON-экспорта diff")
-    p_diff.add_argument("--corpus-policy", choices=["same", "allow-change"], default="same")
+    p_diff.add_argument(
+        "--corpus-policy",
+        choices=["same-content", "same-ids", "allow-change", "same"],
+        default="same-content",
+    )
+    p_diff.add_argument("--workload-policy", choices=["same-content", "same-ids"], default="same-content")
     p_diff.set_defaults(func=cmd_diff)
 
     p_demo_diff = sub.add_parser("demo-diff", help="демо regression diff при смене эмбеддера")
@@ -338,7 +383,12 @@ def main(argv: list[str] | None = None) -> int:
         help="мин. средний per-query overlap: доля 0..1 (0.8 = 80%%)",
     )
     p_gate.add_argument("--strict", action="store_true", help="нарушение -> exit 1 (для CI)")
-    p_gate.add_argument("--corpus-policy", choices=["same", "allow-change"], default="same")
+    p_gate.add_argument(
+        "--corpus-policy",
+        choices=["same-content", "same-ids", "allow-change", "same"],
+        default="same-content",
+    )
+    p_gate.add_argument("--workload-policy", choices=["same-content", "same-ids"], default="same-content")
     p_gate.add_argument(
         "--allow-legacy-alignment",
         action="store_true",
@@ -369,7 +419,8 @@ def main(argv: list[str] | None = None) -> int:
     p_synth.add_argument("--style", choices=["keywords", "text"], default="keywords")
     p_synth.add_argument("--json", help="путь для полного JSON-экспорта")
     p_synth.add_argument("--summary-json", help="компактный JSON")
-    p_synth.add_argument("--max-exported-dark-ids", type=int, default=1000)
+    p_synth.add_argument("--max-exported-dark-ids", type=int, default=0)
+    p_synth.add_argument("--max-lorenz-points", type=int, default=512)
     p_synth.add_argument("--compress", action="store_true", help="gzip для полного JSON")
     p_synth.add_argument("--html", help="путь для HTML-дашборда")
     p_synth.set_defaults(func=cmd_synth)

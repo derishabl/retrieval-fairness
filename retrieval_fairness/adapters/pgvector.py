@@ -11,11 +11,12 @@ adapters/pgvector.py — pgvector-адаптер.
 """
 
 from __future__ import annotations
-from typing import Iterator
-import re
 
-from retrieval_fairness.types import Hit
+import re
+from collections.abc import Iterator
+
 from retrieval_fairness.adapters.base import BaseVectorStoreAdapter
+from retrieval_fairness.types import Hit
 
 # Идентификаторы SQL (table/column/id_column) вставляются в запрос через f-string,
 # поэтому валидируем жёстко: только буквы/цифры/_/. и старт не с цифры.
@@ -92,7 +93,8 @@ class PgvectorAdapter(BaseVectorStoreAdapter):
         vec_str = "[" + ",".join(f"{v:.8g}" for v in query_vec) + "]"
         sql = (
             f"SELECT {self._id_column}, {self._column} {self._distance_op} %s AS dist "
-            f"FROM {self._table} ORDER BY {self._column} {self._distance_op} %s LIMIT %s"
+            f"FROM {self._table} "
+            f"ORDER BY {self._column} {self._distance_op} %s, {self._id_column} ASC LIMIT %s"
         )
         with self._connect().cursor() as cur:
             cur.execute(sql, (vec_str, vec_str, top_k))
@@ -106,9 +108,30 @@ class PgvectorAdapter(BaseVectorStoreAdapter):
 
     def _list_chunk_ids(self) -> Iterator[str]:
         with self._connect().cursor() as cur:
-            cur.execute(f"SELECT {self._id_column} FROM {self._table}")
+            cur.execute(f"SELECT {self._id_column} FROM {self._table} ORDER BY {self._id_column} ASC")
             for (cid,) in cur:  # итерация без fetchall — не держим все id в памяти дважды
                 yield str(cid)
+
+    def provenance_metadata(self) -> dict[str, object]:
+        try:
+            from importlib.metadata import version
+
+            adapter_version = version("psycopg")
+        except Exception:
+            adapter_version = None
+        metric = {"<=>": "cosine", "<->": "l2", "<#>": "inner_product"}[self._distance_op]
+        return {
+            "adapter": "pgvector",
+            "adapter_version": adapter_version,
+            "adapter_config": {
+                "table": self._table,
+                "column": self._column,
+                "id_column": self._id_column,
+            },
+            "distance_metric": metric,
+            "normalized": None,
+            "search_params": {"tie_policy": "distance_asc_chunk_id_asc"},
+        }
 
     @property
     def size(self) -> int:

@@ -14,6 +14,7 @@ probe_precomputed.py — лёгкая локальная часть полног
 """
 
 from __future__ import annotations
+
 import argparse
 import json
 import os
@@ -24,10 +25,10 @@ import numpy as np
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from retrieval_fairness.types import Query
-from retrieval_fairness.adapters.faiss import build_flat_index, FaissAdapter
+from retrieval_fairness.adapters.faiss import FaissAdapter, build_flat_index
 from retrieval_fairness.probe import probe
 from retrieval_fairness.serialize import save_probe
+from retrieval_fairness.types import Query
 
 
 def main() -> int:

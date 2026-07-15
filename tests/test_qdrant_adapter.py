@@ -1,7 +1,9 @@
 """test_qdrant_adapter.py — Qdrant adapter tests (skip without QDRANT_TEST_URL)."""
 
 from __future__ import annotations
+
 import os
+
 import pytest
 
 QDR_URL = os.environ.get("QDRANT_TEST_URL")

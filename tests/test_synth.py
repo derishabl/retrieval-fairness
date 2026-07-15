@@ -1,8 +1,9 @@
 """test_synth.py — synthetic query generation."""
 
 from __future__ import annotations
+
+from retrieval_fairness.synth import synth_probe, synth_queries_from_corpus
 from retrieval_fairness.types import Chunk
-from retrieval_fairness.synth import synth_queries_from_corpus, synth_probe
 
 
 def _chunks():
@@ -15,7 +16,7 @@ def _chunks():
 
 def test_synth_generates_one_query_per_chunk():
     chunks = _chunks()
-    queries, vec = synth_queries_from_corpus(chunks, n_per_chunk=1)
+    queries, _vec = synth_queries_from_corpus(chunks, n_per_chunk=1)
     assert len(queries) == 3
     assert all(q.vector for q in queries)
     # id содержит id чанка
