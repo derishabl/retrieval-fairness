@@ -213,6 +213,47 @@ def test_gate_cli_strict_advisory_and_input_error(tmp_path, capsys):
     common = ["--corpus", str(corpus), "--queries", str(queries), "--json"]
     assert main(["probe", *common, str(baseline), "--top-k", "3"]) == 0
     assert main(["probe", *common, str(candidate), "--top-k", "1"]) == 0
+
+    blast_markdown = tmp_path / "blast-radius.md"
+    assert (
+        main(
+            [
+                "diff",
+                "--baseline",
+                str(baseline),
+                "--candidate",
+                str(candidate),
+                "--blast-radius",
+                str(blast_markdown),
+                "--blast-corpus",
+                str(corpus),
+            ]
+        )
+        == 0
+    )
+    markdown = blast_markdown.read_text(encoding="utf-8")
+    assert "| Newly dark-matter chunks | 1 |" in markdown
+    assert "C" in markdown and "gamma document" in markdown
+
+    blast_csv = tmp_path / "blast-radius.csv"
+    assert (
+        main(
+            [
+                "diff",
+                "--baseline",
+                str(baseline),
+                "--candidate",
+                str(candidate),
+                "--blast-radius",
+                str(blast_csv),
+                "--blast-format",
+                "csv",
+            ]
+        )
+        == 0
+    )
+    assert "new_dark_matter,C,2,0,-2," in blast_csv.read_text(encoding="utf-8")
+
     gate = [
         "gate",
         "--baseline",
@@ -225,6 +266,36 @@ def test_gate_cli_strict_advisory_and_input_error(tmp_path, capsys):
     assert main(gate) == 0
     assert main([*gate, "--strict"]) == 1
     assert main([*gate[:-2], "--max-coverage-drop", "2"]) == 2
+    assert (
+        main(
+            [
+                "diff",
+                "--baseline",
+                str(baseline),
+                "--candidate",
+                str(candidate),
+                "--blast-corpus",
+                str(corpus),
+            ]
+        )
+        == 2
+    )
+    assert (
+        main(
+            [
+                "diff",
+                "--baseline",
+                str(baseline),
+                "--candidate",
+                str(candidate),
+                "--blast-radius",
+                str(tmp_path / "invalid.md"),
+                "--blast-text-limit",
+                "-1",
+            ]
+        )
+        == 2
+    )
     output = capsys.readouterr()
     assert "GATE FAILED" in output.out
     assert "ОШИБКА" in output.err

@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.1 — 2026-07-16
+
+- Add Markdown/CSV migration blast-radius artifacts with newly-dark and rescued chunks.
+- Support explicit, Markdown-bounded corpus-text enrichment without persisting source text in probe baselines.
+
 ## 0.2.0 — 2026-07-16
 
 - Add schema-v3 semantic workload and corpus identities with strict content/revision gate policies.

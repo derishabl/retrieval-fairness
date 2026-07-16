@@ -5,6 +5,7 @@ from pathlib import Path
 
 import pytest
 
+from retrieval_fairness import __version__
 from retrieval_fairness.adapters.inmemory import InMemoryVectorStore
 from retrieval_fairness.probe import probe
 from retrieval_fairness.serialize import (
@@ -37,7 +38,7 @@ def test_v3_roundtrip_identities_and_metadata(tmp_path):
     path, raw = _saved_dict(tmp_path)
     loaded = load_probe(str(path))
     assert raw["schema_version"] == 3
-    assert raw["package_version"] == "0.2.0"
+    assert raw["package_version"] == __version__
     assert raw["metadata"]["created_at"].endswith("Z")
     assert loaded.query_ids == ["q1", "q2"]
     assert loaded.corpus_fingerprint.startswith("sha256:")
