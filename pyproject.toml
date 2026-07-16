@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "retrieval-fairness"
-version = "0.2.0"
+version = "0.2.1"
 description = "Exposure audit for vector search / RAG: coverage, dark matter, Gini, hub capture, CI gate"
 readme = "README.md"
 requires-python = ">=3.9"
@@ -75,6 +75,7 @@ include = [
     "retrieval_fairness/probe.py",
     "retrieval_fairness/serialize.py",
     "retrieval_fairness/diff.py",
+    "retrieval_fairness/blast_radius.py",
     "retrieval_fairness/gate.py",
     "retrieval_fairness/qrels.py",
     "retrieval_fairness/validation.py",

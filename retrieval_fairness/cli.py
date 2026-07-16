@@ -16,6 +16,7 @@ import argparse
 import contextlib
 import json
 import sys
+from pathlib import Path
 
 from retrieval_fairness.adapters import InMemoryVectorStore
 from retrieval_fairness.probe import probe
@@ -69,6 +70,29 @@ def _load_corpus(path: str) -> list[Chunk]:
 def _load_queries(path: str) -> list[Query]:
     rows = _load_jsonl(path)
     return [Query(id=r["id"], vector=r["vector"], text=r.get("text", "")) for r in rows]
+
+
+def _load_chunk_texts(path: str) -> dict[str, str]:
+    """Load optional ID/text enrichment without persisting corpus content in a baseline."""
+    rows = _load_jsonl(path)
+    output: dict[str, str] = {}
+    seen: set[str] = set()
+    for index, row in enumerate(rows):
+        if not isinstance(row, dict):
+            raise ValueError(f"blast corpus row {index} must be a JSON object")
+        chunk_id = row.get("id")
+        if not isinstance(chunk_id, str) or not chunk_id:
+            raise ValueError(f"blast corpus row {index} must contain a non-empty string id")
+        if chunk_id in seen:
+            raise ValueError(f"blast corpus contains duplicate chunk ID {chunk_id!r}")
+        seen.add(chunk_id)
+        text = row.get("text")
+        if text is None:
+            continue
+        if not isinstance(text, str):
+            raise ValueError(f"blast corpus text for {chunk_id!r} must be a string")
+        output[chunk_id] = text
+    return output
 
 
 def _validate_store_args(args: argparse.Namespace) -> None:
@@ -196,10 +220,17 @@ def cmd_demo(args: argparse.Namespace) -> int:
 
 
 def cmd_diff(args: argparse.Namespace) -> int:
+    from retrieval_fairness.blast_radius import build_blast_radius, save_blast_radius
     from retrieval_fairness.diff import diff_reports
     from retrieval_fairness.serialize import load_probe
 
     try:
+        if args.blast_corpus and not args.blast_radius:
+            raise ValueError("--blast-corpus requires --blast-radius")
+        if args.blast_format and not args.blast_radius:
+            raise ValueError("--blast-format requires --blast-radius")
+        if args.blast_text_limit < 0:
+            raise ValueError("--blast-text-limit must be non-negative")
         base = load_probe(args.baseline)
         cand = load_probe(args.candidate)
         d = diff_reports(
@@ -208,16 +239,35 @@ def cmd_diff(args: argparse.Namespace) -> int:
             corpus_policy=args.corpus_policy,
             workload_policy=args.workload_policy,
         )
-    except (ValueError, FileNotFoundError, KeyError) as e:
+        blast = None
+        if args.blast_radius:
+            chunk_texts = _load_chunk_texts(args.blast_corpus) if args.blast_corpus else None
+            blast = build_blast_radius(d, base, cand, chunk_texts=chunk_texts)
+    except (ValueError, FileNotFoundError, KeyError, OSError) as e:
         print(f"ОШИБКА: {e}", file=sys.stderr)
         return 2
     print(d)
-    if args.json:
-        import json as _json
+    try:
+        if args.json:
+            import json as _json
 
-        with open(args.json, "w", encoding="utf-8") as f:
-            _json.dump(d.to_dict(), f, ensure_ascii=False, indent=2)
-        print(f"\nJSON-diff сохранён: {args.json}")
+            with open(args.json, "w", encoding="utf-8") as f:
+                _json.dump(d.to_dict(), f, ensure_ascii=False, indent=2)
+            print(f"\nJSON-diff сохранён: {args.json}")
+        if args.blast_radius and blast is not None:
+            blast_format = args.blast_format or "md"
+            save_blast_radius(
+                blast,
+                args.blast_radius,
+                output_format=blast_format,
+                baseline_label=Path(args.baseline).name,
+                candidate_label=Path(args.candidate).name,
+                max_text_chars=args.blast_text_limit,
+            )
+            print(f"\nBlast-radius ({blast_format}) сохранён: {args.blast_radius}")
+    except (ValueError, OSError) as e:
+        print(f"ОШИБКА: {e}", file=sys.stderr)
+        return 2
     return 0
 
 
@@ -340,6 +390,25 @@ def main(argv: list[str] | None = None) -> int:
     p_diff.add_argument("--baseline", required=True)
     p_diff.add_argument("--candidate", required=True)
     p_diff.add_argument("--json", help="путь для JSON-экспорта diff")
+    p_diff.add_argument(
+        "--blast-radius",
+        help="PR-friendly список newly-dark/rescued чанков (Markdown по умолчанию)",
+    )
+    p_diff.add_argument(
+        "--blast-format",
+        choices=["md", "csv"],
+        help="формат blast-radius; по умолчанию md",
+    )
+    p_diff.add_argument(
+        "--blast-corpus",
+        help="необязательный JSONL {id,text}: добавить тексты чанков в blast-radius",
+    )
+    p_diff.add_argument(
+        "--blast-text-limit",
+        type=int,
+        default=240,
+        help="макс. символов текста в Markdown-строке; 0 = без ограничения (default: 240)",
+    )
     p_diff.add_argument(
         "--corpus-policy",
         choices=["same-content", "same-ids", "allow-change", "same"],

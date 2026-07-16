@@ -42,7 +42,9 @@ python -m retrieval_fairness.case_run --corpus data/nq/corpus.jsonl \
     --queries data/nq/queries.jsonl --embedder bge --top-k 10 \
     --out cases/nq_bge_sample --html cases/nq_bge_sample.html
 python -m retrieval_fairness diff \
-    --baseline cases/nq_tfidf_sample.json --candidate cases/nq_bge_sample.json
+    --baseline cases/nq_tfidf_sample.json --candidate cases/nq_bge_sample.json \
+    --blast-radius cases/nq_migration_blast_radius.md \
+    --blast-corpus data/nq/corpus.jsonl
 ```
 
 ## Результаты
@@ -161,10 +163,13 @@ T-Retrievability (источник наших метрик) публиковал
 ## Killer-feature в действии
 
 Regression-diff lexical→dense — это та продуктовая обёртка, которой
-голые скрипты T-Retrievability не дают. T-Retrievability считает Gini
-на одном прогоне; мы показываем **что именно поменяется при миграции
-эмбеддера**: какие чанки станут dark matter, какие спасутся, насколько
-изменится выдача по запросам. Команда, мигрирующая TF-IDF→BGE, запускает
+голые скрипты T-Retrievability не дают. Markdown/CSV blast-radius превращает
+результат в готовый PR-review артефакт: все 1155 newly-dark и 929 rescued
+чанков перечислены с частотой до/после, delta и опциональным текстом.
+T-Retrievability считает Gini на одном прогоне; мы показываем **что именно
+поменяется при миграции эмбеддера**: какие чанки станут dark matter, какие
+спасутся, насколько изменится выдача по запросам. Команда, мигрирующая
+TF-IDF→BGE, запускает
 одну команду и видит: «929 чанков оживут, 1155 умрут, выдача по 87%
 запросов изменится» — и принимает решение осознанно, а не вслепую.
 

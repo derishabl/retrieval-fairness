@@ -88,6 +88,24 @@ retrieval-fairness diff --baseline before.json --candidate after.json \
     --corpus-policy allow-change
 ```
 
+Generate a PR-friendly per-chunk migration artifact showing exactly what lost
+or gained exposure:
+
+```bash
+# Markdown by default; --blast-corpus explicitly enriches rows with chunk text.
+retrieval-fairness diff --baseline before.json --candidate after.json \
+    --blast-radius migration-blast-radius.md --blast-corpus corpus.jsonl
+# Stable machine-readable form:
+retrieval-fairness diff --baseline before.json --candidate after.json \
+    --blast-radius migration-blast-radius.csv --blast-format csv
+```
+
+The artifact lists every newly-dark and rescued chunk with baseline/candidate
+retrieval frequency and delta. Full baselines deliberately do not persist corpus
+text; pass `--blast-corpus` only when text is appropriate for the PR artifact.
+Markdown bounds each text cell to 240 characters by default to stay reviewable
+(`--blast-text-limit 0` disables this); CSV always preserves the full text.
+
 Schema v3 separates logical ID sets, physical order, semantic content/revision,
 and FAISS index mapping identities. `same-content` is the CLI/gate default:
 changing query or chunk text under the same ID is rejected, while reordering
@@ -164,6 +182,7 @@ a read-only compatibility alias for micro recall in JSON and Python.
 - `metrics.py` — coverage, gini, lorenz, hub_capture, FairnessReport.
 - `probe.py` — run a workload → retrieval frequency → report.
 - `diff.py` — regression diff between two runs.
+- `blast_radius.py` — Markdown/CSV per-chunk migration review artifacts.
 - `gate.py` — CI gate with configurable rules.
 - `synth.py` — antihub self-query audit (synthetic queries from the corpus).
 - `qrels.py` — dark-matter vs qrels cross-check ("lost gold").

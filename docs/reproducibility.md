@@ -43,6 +43,12 @@ A full probe is an integrity-checked raw source for `load_probe`, `diff`, and
 frequencies, query IDs, and dark IDs, and samples the Lorenz curve to at most 512
 quantile points by default. `load_probe()` deliberately rejects summaries.
 
+A migration blast-radius Markdown/CSV file is also a derived presentation
+artifact, never a regression source. It contains newly-dark/rescued IDs and
+frequency deltas. Probe baselines do not persist source text; `diff
+--blast-corpus corpus.jsonl` performs explicit, output-only text enrichment.
+Markdown text cells are bounded to 240 characters by default; CSV is lossless.
+
 Run the fixed-size performance check with:
 
 ```bash

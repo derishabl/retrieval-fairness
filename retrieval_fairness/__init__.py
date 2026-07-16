@@ -11,9 +11,15 @@ JMLR 2010) и README «Why your index has dark matter».
 (coverage, Gini, dark-matter, hub-capture) + CLI probe.
 """
 
-__version__ = "0.2.0"
+__version__ = "0.2.1"
 
 from retrieval_fairness.adapters import InMemoryVectorStore
+from retrieval_fairness.blast_radius import (
+    BlastRadiusEntry,
+    BlastRadiusReport,
+    build_blast_radius,
+    save_blast_radius,
+)
 from retrieval_fairness.diff import DiffReport, diff_reports
 from retrieval_fairness.metrics import (
     FairnessReport,
@@ -31,6 +37,8 @@ from retrieval_fairness.serialize import load_probe, save_probe
 from retrieval_fairness.types import Chunk, Hit, Query, VectorStore
 
 __all__ = [
+    "BlastRadiusEntry",
+    "BlastRadiusReport",
     "Chunk",
     "DiffReport",
     "FairnessReport",
@@ -42,6 +50,7 @@ __all__ = [
     "Query",
     "VectorStore",
     "__version__",
+    "build_blast_radius",
     "coverage",
     "dark_matter",
     "diff_reports",
@@ -51,6 +60,7 @@ __all__ = [
     "lorenz",
     "probe",
     "reachability_ceiling",
+    "save_blast_radius",
     "save_probe",
     "validate_qrels",
 ]
